@@ -1,92 +1,62 @@
 // ===== SUPABASE CONFIG =====
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://opzzzwceeydllodemucd.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_KV4otsvBhkNRK4bgKHqKvg_gYe79yXV';
 const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ===== GROQ CONFIG (Free, very fast) =====
-const GROQ_API_KEY = 'YOUR_GROQ_API_KEY'; // Get free key at console.groq.com
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+// ===== FLASK BACKEND CONFIG =====
+const FLASK_API_URL = 'http://localhost:5000/api/analyze';
 
 // ===== PDF PARSER CONFIG =====
 if (typeof pdfjsLib !== 'undefined') {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
 
-// ===== AI RESUME PARSING (Groq) =====
-async function parseResumeWithAI(text, filename) {
-  if (!GROQ_API_KEY) {
-    throw new Error('Groq API key not set. Get free key at console.groq.com');
-  }
+// ===== TEXT PRE-PROCESSING: Header Detection =====
+const RESUME_HEADER_PATTERN = /^(?:EXPERIENCE|WORK\s+EXPERIENCE|EMPLOYMENT\s+HISTORY|EDUCATION|SKILLS|TECHNICAL\s+SKILLS|PROJECTS|CERTIFICATIONS|ACHIEVEMENTS|SUMMARY|PROFESSIONAL\s+SUMMARY|OBJECTIVE|LANGUAGES|INTERESTS|REFERENCES|CONTACT|PERSONAL\s+DETAILS|AWARDS|PUBLICATIONS|VOLUNTEER\s+EXPERIENCE|LINKS|PORTFOLIO)\s*$/gim;
 
-  const prompt = `Extract structured data from this resume. Return ONLY valid JSON:
-{
-  "name": "full name",
-  "email": "email address",
-  "phone": "phone number",
-  "location": "city, country",
-  "summary": "2-3 sentence professional summary",
-  "skills": ["skill1", "skill2"],
-  "experience_years": number,
-  "education": "highest degree and institution",
-  "certifications": ["cert1"],
-  "languages": ["lang1"]
-}
-
-Resume text:
-${text.substring(0, 4000)}
-
-Return ONLY the JSON, no other text.`;
-
-  const response = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GROQ_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'llama-3.1-8b-instant',
-      messages: [
-        { role: 'system', content: 'You are a resume parser. Return valid JSON only.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.1,
-      max_tokens: 1500
-    })
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(data.error?.message || `HTTP ${response.status}`);
-  }
-
-  const content = data.choices[0].message.content;
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]);
-  }
-  throw new Error('No JSON found in AI response');
+function preprocessText(rawText) {
+  // Collapse runs of whitespace within lines, then normalise line breaks
+  let text = rawText.replace(/\r\n?/g, '\n');
+  // Insert double newline before recognised section headers
+  text = text.replace(RESUME_HEADER_PATTERN, '\n\n$&');
+  // Collapse 3+ consecutive newlines into exactly 2
+  text = text.replace(/\n{3,}/g, '\n\n');
+  return text.trim();
 }
 
 // ===== RESUME PARSING FUNCTIONS =====
 async function parsePDF(file) {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  let fullText = '';
-  
+  const pageTexts = [];
+
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
-    fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+    // Build page text preserving approximate structure
+    let lastY = null;
+    let pageLines = [];
+    let currentLine = [];
+    for (const item of textContent.items) {
+      if (lastY !== null && Math.abs(item.transform[5] - lastY) > 2) {
+        pageLines.push(currentLine.join(' '));
+        currentLine = [];
+      }
+      currentLine.push(item.str);
+      lastY = item.transform[5];
+    }
+    if (currentLine.length) pageLines.push(currentLine.join(' '));
+    pageTexts.push(pageLines.join('\n'));
   }
-  
-  return fullText;
+
+  const raw = pageTexts.join('\n\n');
+  return preprocessText(raw);
 }
 
 async function parseDOCX(file) {
   const arrayBuffer = await file.arrayBuffer();
   const result = await mammoth.extractRawText({ arrayBuffer });
-  return result.value;
+  return preprocessText(result.value);
 }
 
 function extractSkills(text) {
@@ -347,6 +317,28 @@ function sendChat() {
   }, 1000);
 }
 
+// ===== GLOBAL STATE =====
+let attachedFile = null;
+
+// ===== FILE ATTACH (Gmail-like, no processing) =====
+function handleResumeUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  attachedFile = file;
+
+  document.getElementById('uploadPlaceholder').style.display = 'none';
+  document.getElementById('uploadPreview').style.display = 'flex';
+  document.getElementById('attachedFileName').textContent = file.name;
+}
+
+function removeAttachedFile() {
+  attachedFile = null;
+  document.getElementById('resumeInput').value = '';
+  document.getElementById('uploadPlaceholder').style.display = 'block';
+  document.getElementById('uploadPreview').style.display = 'none';
+  document.getElementById('atsResultsSection').style.display = 'none';
+}
+
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
   renderOpportunities();
@@ -356,151 +348,231 @@ document.addEventListener('DOMContentLoaded', () => {
   animateMetric('metric-applied', 386);
   animateMetric('metric-groups', 24);
 
-  // Resume upload handler
-  const resumeInput = document.getElementById('resumeInput');
-  const uploadZone = document.getElementById('uploadZone');
+  // File input change
+  document.getElementById('resumeInput').addEventListener('change', handleResumeUpload);
 
-  resumeInput.addEventListener('change', handleResumeUpload);
-
-  // Drag and drop support
-  uploadZone.addEventListener('dragover', (e) => {
+  // Drag and drop
+  const zone = document.getElementById('uploadZone');
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.style.borderColor = 'var(--primary)'; zone.style.background = 'var(--primary-light)'; });
+  zone.addEventListener('dragleave', (e) => { e.preventDefault(); zone.style.borderColor = ''; zone.style.background = ''; });
+  zone.addEventListener('drop', (e) => {
     e.preventDefault();
-    uploadZone.style.borderColor = 'var(--primary)';
-    uploadZone.style.background = 'var(--primary-light)';
-  });
-
-  uploadZone.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    uploadZone.style.borderColor = '';
-    uploadZone.style.background = '';
-  });
-
-  uploadZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadZone.style.borderColor = '';
-    uploadZone.style.background = '';
+    zone.style.borderColor = '';
+    zone.style.background = '';
     const file = e.dataTransfer.files[0];
-    if (file) uploadToSupabase(file);
+    if (file) {
+      attachedFile = file;
+      document.getElementById('uploadPlaceholder').style.display = 'none';
+      document.getElementById('uploadPreview').style.display = 'flex';
+      document.getElementById('attachedFileName').textContent = file.name;
+    }
   });
 });
 
-// ===== RESUME UPLOAD TO SUPABASE =====
-async function handleResumeUpload(e) {
-  const file = e.target.files[0];
-  if (file) uploadToSupabase(file);
-}
+// ===== ANALYZE (Flask backend — multi-pass Ollama pipeline) =====
+async function analyzeATS() {
+  if (!attachedFile) { alert('Please attach a resume first.'); return; }
 
-async function uploadToSupabase(file) {
-  const uploadZone = document.getElementById('uploadZone');
-  const originalContent = uploadZone.innerHTML;
+  const targetRole = document.getElementById('targetRoleInput').value.trim();
+  const jobDesc = document.getElementById('jobDescriptionInput').value.trim();
+  if (!targetRole && !jobDesc) { alert('Please enter a target job role or job description.'); return; }
 
-  uploadZone.innerHTML = `
-    <div class="upload-icon"><i class="fas fa-spinner fa-spin"></i></div>
-    <h4>AI Parsing Resume...</h4>
-    <p>${file.name}</p>
-  `;
+  const analyzeBtn = document.getElementById('analyzeAtsBtn');
+  const status = document.getElementById('composeStatus');
+  const resultsSection = document.getElementById('atsResultsSection');
+  const atsScore = document.getElementById('atsScore');
+  const atsArc = document.getElementById('atsArc');
+  const suggestionsDiv = document.getElementById('atsSuggestions');
+  const reportDiv = document.getElementById('atsReport');
+
+  // Show loading
+  analyzeBtn.disabled = true;
+  analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+  status.style.display = 'inline';
+  status.textContent = 'Reading resume...';
+  resultsSection.style.display = 'none';
 
   try {
+    // Step 1: Parse the file client-side (PDF/DOCX → text)
     let extractedText = '';
-    const fileExt = file.name.split('.').pop().toLowerCase();
-    
+    const fileExt = attachedFile.name.split('.').pop().toLowerCase();
     if (fileExt === 'pdf') {
-      extractedText = await parsePDF(file);
+      extractedText = await parsePDF(attachedFile);
     } else if (fileExt === 'docx') {
-      extractedText = await parseDOCX(file);
+      extractedText = await parseDOCX(attachedFile);
     } else {
-      extractedText = await file.text();
+      extractedText = await attachedFile.text();
     }
 
-    const aiData = await parseResumeWithAI(extractedText, file.name);
+    // Step 2: Send to Flask backend (3-pass Ollama pipeline + deterministic scoring)
+    status.textContent = 'Pass 1/3 — Extracting resume data...';
 
-    const skills = aiData.skills || [];
-    const experienceYears = aiData.experience_years || null;
-    const education = aiData.education || '';
-    const summary = aiData.summary || '';
-    const name = aiData.name || file.name.split('.')[0];
-    const email = aiData.email || '';
-    const phone = aiData.phone || '';
-    const location = aiData.location || '';
-    const certifications = aiData.certifications || [];
-    const languages = aiData.languages || [];
+    const backendPayload = {
+      resume_text: extractedText,
+      target_role: targetRole || null,
+      job_description: jobDesc || null,
+    };
 
+    status.textContent = 'Running multi-pass AI pipeline on local Ollama...';
+
+    const response = await fetch(FLASK_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(backendPayload),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      const errMsg = result.error || `Backend returned HTTP ${response.status}`;
+      throw new Error(errMsg);
+    }
+
+    const resumeData = result.resume_data || {};
+    const jdData = result.jd_data || {};
+    const evaluation = result.evaluation || {};
+    const score = result.score || 0;
+    const breakdown = result.score_breakdown || {};
+
+    // Step 3: Upload file to Supabase Storage
+    status.textContent = 'Uploading to Supabase...';
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `resumes/${fileName}`;
 
-    const { data, error } = await sbClient.storage
+    const { error: uploadError } = await sbClient.storage
       .from('resumes')
-      .upload(filePath, file);
-
-    if (error) throw error;
+      .upload(filePath, attachedFile);
+    if (uploadError) throw uploadError;
 
     const fileUrl = `${SUPABASE_URL}/storage/v1/object/public/resumes/${filePath}`;
 
+    // Step 4: Store everything in unified table
+    status.textContent = 'Storing analysis in database...';
     const { error: dbError } = await sbClient
-      .from('resumes')
+      .from('resume_analyses')
       .insert({
-        file_name: file.name,
+        file_name: attachedFile.name,
         file_url: fileUrl,
-        file_size: file.size,
+        file_size: attachedFile.size,
         file_type: fileExt,
         extracted_text: extractedText.substring(0, 10000),
-        summary: summary,
-        skills: skills,
-        experience_years: experienceYears,
-        education: education,
+        summary: resumeData.summary || '',
+        skills: resumeData.skills || [],
+        experience_years: resumeData.experience_years || null,
+        education: resumeData.education || '',
+        metadata: {
+          name: resumeData.name || '',
+          email: resumeData.email || '',
+          phone: resumeData.phone || '',
+          location: resumeData.location || '',
+          certifications: resumeData.certifications || [],
+          languages: resumeData.languages || [],
+          experience_entries: resumeData.experience_entries || [],
+        },
+        target_role: targetRole || null,
+        job_description: jobDesc || null,
+        jd_mandatory_skills: jdData.mandatory_skills || [],
+        jd_nice_to_have_skills: jdData.nice_to_have_skills || [],
+        jd_minimum_years_experience: jdData.minimum_years_experience || null,
+        jd_role_title: jdData.role_title || '',
+        jd_summary: jdData.summary || '',
+        candidate_name: resumeData.name || null,
+        candidate_email: resumeData.email || null,
+        ats_score: score,
+        mandatory_score: breakdown.mandatory_skills?.percentage || 0,
+        experience_score: breakdown.experience?.percentage || 0,
+        nice_to_have_score: breakdown.nice_to_have?.percentage || 0,
+        skills_matched: evaluation.matched_skills || [],
+        skills_missing: evaluation.missing_skills || [],
+        nice_to_have_matched: evaluation.nice_to_have_matched || [],
+        nice_to_have_missing: evaluation.nice_to_have_missing || [],
+        meets_experience: evaluation.meets_experience_requirement || false,
+        strengths: evaluation.strengths || [],
+        weaknesses: evaluation.weaknesses || [],
+        recommendations: evaluation.recommendations || [],
+        verdict: evaluation.verdict || '',
+        parsed_with: 'ollama-llama3.1-multi-pass',
         user_id: 'anonymous',
-        metadata: { 
-          originalName: file.name, 
-          uploadSource: 'web',
-          parsedAt: new Date().toISOString(),
-          parsedWith: 'groq-ai',
-          name: name,
-          email: email,
-          phone: phone,
-          location: location,
-          certifications: certifications,
-          languages: languages
-        }
       });
-
     if (dbError) throw dbError;
 
-    uploadZone.innerHTML = `
-      <div class="upload-icon" style="color:var(--green);"><i class="fas fa-check-circle"></i></div>
-      <h4>AI Parsed & Uploaded!</h4>
-      <p>${file.name}</p>
-      <div style="margin-top:12px;font-size:12px;color:var(--text-secondary);text-align:left;">
-        <div style="color:var(--primary);font-weight:600;margin-bottom:4px;">Parsed with: Groq AI</div>
-        ${name ? `<div><strong>Name:</strong> ${name}</div>` : ''}
-        ${email ? `<div><strong>Email:</strong> ${email}</div>` : ''}
-        ${phone ? `<div><strong>Phone:</strong> ${phone}</div>` : ''}
-        ${location ? `<div><strong>Location:</strong> ${location}</div>` : ''}
-        ${skills.length > 0 ? `<div><strong>Skills:</strong> ${skills.slice(0, 8).join(', ')}</div>` : ''}
-        ${experienceYears ? `<div><strong>Experience:</strong> ${experienceYears} years</div>` : ''}
-        ${education ? `<div><strong>Education:</strong> ${education}</div>` : ''}
-        ${languages.length > 0 ? `<div><strong>Languages:</strong> ${languages.join(', ')}</div>` : ''}
+    // Step 5: Render results
+    status.textContent = '';
+    status.style.display = 'none';
+    analyzeBtn.disabled = false;
+    analyzeBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Analyze & Store';
+
+    resultsSection.style.display = 'block';
+
+    const clampedScore = Math.min(100, Math.max(0, score));
+    const offset = 314 - (314 * clampedScore / 100);
+    atsArc.style.strokeDashoffset = offset;
+    atsScore.textContent = `${clampedScore}%`;
+
+    if (clampedScore >= 75) { atsArc.style.stroke = 'var(--green)'; atsScore.style.color = 'var(--green)'; }
+    else if (clampedScore >= 50) { atsArc.style.stroke = 'var(--amber)'; atsScore.style.color = 'var(--amber)'; }
+    else { atsArc.style.stroke = 'var(--red)'; atsScore.style.color = 'var(--red)'; }
+
+    suggestionsDiv.innerHTML = `<h4>Optimization Suggestions</h4>
+      ${(evaluation.recommendations || []).map(r => `<div class="suggestion-item"><span class="si-icon"><i class="fas fa-lightbulb"></i></span><span>${r}</span></div>`).join('')}
+      ${(evaluation.weaknesses || []).map(w => `<div class="suggestion-item"><span class="si-icon"><i class="fas fa-exclamation-triangle"></i></span><span>${w}</span></div>`).join('')}`;
+
+    // Score breakdown panel
+    const b = breakdown;
+    reportDiv.innerHTML = `<div style="font-size:13px;line-height:1.8;">
+      <div style="margin-bottom:12px;"><strong>Verdict:</strong> ${evaluation.verdict || 'N/A'}</div>
+
+      <div style="margin-bottom:16px;padding:12px;background:var(--bg-secondary);border-radius:8px;">
+        <strong style="display:block;margin-bottom:8px;"><i class="fas fa-chart-pie" style="color:var(--primary);margin-right:4px;"></i> Score Breakdown</strong>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:120px;">
+            <div style="font-size:11px;color:var(--text-muted);">Mandatory Skills (40%)</div>
+            <div style="font-weight:600;">${b.mandatory_skills ? b.mandatory_skills.matched + '/' + b.mandatory_skills.total : '—'} <span style="font-size:11px;color:var(--text-muted);">(${b.mandatory_skills ? b.mandatory_skills.percentage : 0}%)</span></div>
+          </div>
+          <div style="flex:1;min-width:120px;">
+            <div style="font-size:11px;color:var(--text-muted);">Experience (30%)</div>
+            <div style="font-weight:600;">${b.experience ? (b.experience.meets_requirement ? 'Meets' : 'Below') : '—'} <span style="font-size:11px;color:var(--text-muted);">(${b.experience ? b.experience.percentage : 0}%)</span></div>
+          </div>
+          <div style="flex:1;min-width:120px;">
+            <div style="font-size:11px;color:var(--text-muted);">Nice-to-Haves (30%)</div>
+            <div style="font-weight:600;">${b.nice_to_have ? b.nice_to_have.matched + '/' + b.nice_to_have.total : '—'} <span style="font-size:11px;color:var(--text-muted);">(${b.nice_to_have ? b.nice_to_have.percentage : 0}%)</span></div>
+          </div>
+        </div>
       </div>
-    `;
-    
-    uploadZone.onclick = () => {
-      uploadZone.innerHTML = originalContent;
-      uploadZone.onclick = () => document.getElementById('resumeInput').click();
-      document.getElementById('resumeInput').addEventListener('change', handleResumeUpload);
-    };
+
+      ${jdData.role_title ? `<div style="margin-bottom:12px;"><strong>Target Role:</strong> ${jdData.role_title}</div>` : ''}
+      ${jdData.summary ? `<div style="margin-bottom:12px;"><strong>JD Summary:</strong> <span style="color:var(--text-secondary);">${jdData.summary}</span></div>` : ''}
+
+      <div style="margin-bottom:8px;"><strong style="color:var(--green);">Matched Skills (${evaluation.matched_skills ? evaluation.matched_skills.length : 0}):</strong></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+        ${(evaluation.matched_skills || []).map(s => `<span class="skill-tag" style="background:var(--green-light);color:var(--green);">${s}</span>`).join('')}
+      </div>
+      <div style="margin-bottom:8px;"><strong style="color:var(--red);">Missing Skills (${evaluation.missing_skills ? evaluation.missing_skills.length : 0}):</strong></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+        ${(evaluation.missing_skills || []).map(s => `<span class="skill-tag" style="background:var(--red-light);color:var(--red);">${s}</span>`).join('')}
+      </div>
+      ${(evaluation.nice_to_have_matched && evaluation.nice_to_have_matched.length > 0) ? `
+        <div style="margin-bottom:8px;"><strong style="color:var(--teal);">Nice-to-Have Matched:</strong></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+          ${evaluation.nice_to_have_matched.map(s => `<span class="skill-tag" style="background:var(--primary-light);color:var(--primary);">${s}</span>`).join('')}
+        </div>
+      ` : ''}
+      <div style="margin-bottom:8px;"><strong>Strengths:</strong></div>
+      ${(evaluation.strengths || []).map(s => `<div style="font-size:12px;color:var(--green);margin-bottom:4px;">&#10003; ${s}</div>`).join('')}
+    </div>`;
 
   } catch (err) {
-    console.error('Upload error:', err);
-    uploadZone.innerHTML = `
-      <div class="upload-icon" style="color:var(--red);"><i class="fas fa-exclamation-circle"></i></div>
-      <h4>AI Parsing Failed</h4>
-      <p style="font-size:13px;">${err.message}</p>
-      <p style="margin-top:8px;font-size:12px;color:var(--text-muted);">Check Console (F12) for details. Click to retry.</p>
-    `;
-    uploadZone.onclick = () => {
-      uploadZone.innerHTML = originalContent;
-      uploadZone.onclick = () => document.getElementById('resumeInput').click();
-      document.getElementById('resumeInput').addEventListener('change', handleResumeUpload);
-    };
+    console.error('Analyze error:', err);
+    let userMessage = err.message;
+    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      userMessage = 'Cannot reach Flask backend at localhost:5000. Make sure the Python server is running: python app.py';
+    } else if (err.message.includes('ollama') || err.message.includes('Ollama')) {
+      userMessage = 'Ollama is unreachable. Make sure Ollama is running: ollama serve';
+    }
+    status.style.display = 'inline';
+    status.textContent = 'Error: ' + userMessage;
+    analyzeBtn.disabled = false;
+    analyzeBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Analyze & Store';
   }
 }
 

@@ -1164,6 +1164,144 @@ body {
   font-weight: 600;
 }
 
+/* ===== COMPOSE SECTION (Gmail-like) ===== */
+.compose-section {
+  max-width: 800px;
+  margin: 0 auto 32px;
+}
+
+.compose-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.compose-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.compose-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.upload-zone-compose {
+  border: 2px dashed var(--border-color);
+  border-radius: 12px;
+  margin: 16px 24px;
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: var(--bg-secondary);
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-zone-compose:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.upload-icon-compose {
+  font-size: 28px;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.upload-zone-compose p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 2px 0;
+}
+
+.upload-link {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.upload-hint {
+  font-size: 12px !important;
+  color: var(--text-muted) !important;
+}
+
+.file-attachment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.file-attachment i {
+  font-size: 20px;
+  color: var(--primary);
+}
+
+.file-attachment span {
+  flex: 1;
+  text-align: left;
+}
+
+.remove-file {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--red-light);
+  color: var(--red);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.remove-file:hover {
+  background: var(--red);
+  color: white;
+}
+
+.compose-body {
+  padding: 0 24px 16px;
+}
+
+.compose-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ===== UPLOAD + JD SECTION ===== */
+.upload-jd-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 8px;
+}
+
+.upload-jd-left .upload-zone {
+  min-height: 220px;
+}
+
+.upload-jd-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 1024px) {
   .nav-grid { grid-template-columns: 1fr; }
@@ -1171,6 +1309,7 @@ body {
   .module-body-flex { flex-direction: column; }
   .broadcast-panel, .funding-input-panel { width: 100%; position: static; }
   .upload-section { grid-template-columns: 1fr; }
+  .upload-jd-section { grid-template-columns: 1fr; }
   .job-feed { grid-template-columns: 1fr; }
   .kanban-board { grid-template-columns: repeat(2, 1fr); }
   .funding-layout { flex-direction: column; }

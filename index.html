@@ -218,48 +218,70 @@
   </div>
 
   <div class="module-body">
-    <div class="upload-section">
-      <div style="display:flex;flex-direction:column;gap:16px;">
-        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('resumeInput').click()">
-          <div class="upload-icon"><i class="fas fa-cloud-arrow-up"></i></div>
-          <h4>Drop Resume Here</h4>
-          <p>PDF, DOCX &bull; Max 5MB</p>
+    <div class="compose-section">
+      <div class="compose-card">
+
+        <!-- Upload Zone (Gmail-like attach) -->
+        <div class="upload-zone-compose" id="uploadZone">
           <input type="file" id="resumeInput" hidden accept=".pdf,.docx">
+          <div id="uploadPlaceholder" onclick="document.getElementById('resumeInput').click()">
+            <div class="upload-icon-compose"><i class="fas fa-cloud-arrow-up"></i></div>
+            <p>Drag & drop your resume or <span class="upload-link">browse</span></p>
+            <p class="upload-hint">PDF, DOCX &bull; Max 5MB</p>
+          </div>
+          <div id="uploadPreview" style="display:none;">
+            <div class="file-attachment">
+              <i class="fas fa-file-alt"></i>
+              <span id="attachedFileName"></span>
+              <button class="remove-file" onclick="removeAttachedFile()">&times;</button>
+            </div>
+          </div>
         </div>
-        <div style="display:flex;gap:12px;">
-          <input class="form-input" placeholder="Target Job Roles (e.g., Backend Engineer)" style="flex:1;">
-          <input class="form-input" placeholder="Or paste a Target JD Link..." style="flex:1;">
+
+        <!-- Job Role + JD -->
+        <div class="compose-body">
+          <div class="form-group">
+            <label class="form-label">Target Job Role *</label>
+            <input id="targetRoleInput" class="form-input" placeholder="e.g., Senior Backend Engineer, ML Engineer, Full-Stack Developer">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Job Description (Optional)</label>
+            <textarea id="jobDescriptionInput" class="form-textarea" rows="4" placeholder="Paste the full job description here for more accurate ATS scoring..."></textarea>
+          </div>
+        </div>
+
+        <!-- Analyze Button -->
+        <div class="compose-footer">
+          <button id="analyzeAtsBtn" class="btn-primary" onclick="analyzeATS()">
+            <i class="fas fa-wand-magic-sparkles"></i> Analyze & Store
+          </button>
+          <span id="composeStatus" style="font-size:12px;color:var(--text-muted);"></span>
         </div>
       </div>
+    </div>
 
-      <div class="ats-panel">
-        <div class="ats-dial">
-          <svg width="120" height="120" viewBox="0 0 120 120">
-            <circle class="ats-dial-bg" cx="60" cy="60" r="50"/>
-            <circle class="ats-dial-fill" cx="60" cy="60" r="50"
-              stroke-dasharray="314"
-              stroke-dashoffset="110"
-              id="atsArc"/>
-          </svg>
-          <div class="ats-dial-text">
-            <div class="score" id="atsScore">65%</div>
-            <div class="label">ATS Match</div>
+    <!-- ATS Results -->
+    <div id="atsResultsSection" style="display:none;">
+      <div class="upload-section">
+        <div class="ats-panel">
+          <div class="ats-dial">
+            <svg width="120" height="120" viewBox="0 0 120 120">
+              <circle class="ats-dial-bg" cx="60" cy="60" r="50"/>
+              <circle class="ats-dial-fill" cx="60" cy="60" r="50"
+                stroke-dasharray="314" stroke-dashoffset="314" id="atsArc"/>
+            </svg>
+            <div class="ats-dial-text">
+              <div class="score" id="atsScore">--</div>
+              <div class="label">ATS Match</div>
+            </div>
+          </div>
+          <div class="suggestions" id="atsSuggestions">
+            <h4>Optimization Suggestions</h4>
           </div>
         </div>
-        <div class="suggestions">
-          <h4>Optimization Suggestions</h4>
-          <div class="suggestion-item">
-            <span class="si-icon"><i class="fas fa-exclamation-triangle"></i></span>
-            <span>Consider adding <strong>Java Collections</strong> or <strong>Flask</strong> experience to match the JD keywords.</span>
-          </div>
-          <div class="suggestion-item">
-            <span class="si-icon"><i class="fas fa-exclamation-triangle"></i></span>
-            <span>Include measurable impact metrics (e.g., "reduced latency by 40%") in your experience section.</span>
-          </div>
-          <div class="suggestion-item">
-            <span class="si-icon"><i class="fas fa-lightbulb"></i></span>
-            <span>Your education section is strong. Consider adding relevant coursework or certifications.</span>
-          </div>
+        <div class="ats-panel">
+          <h4 style="margin-bottom:12px;"><i class="fas fa-clipboard-list" style="color:var(--primary);margin-right:6px;"></i> Detailed Report</h4>
+          <div id="atsReport"></div>
         </div>
       </div>
     </div>
