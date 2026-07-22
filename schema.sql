@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS resume_analyses (
   verdict TEXT,
 
   -- Processing Info
-  parsed_with TEXT DEFAULT 'ollama-llama3.1',
+  parsed_with TEXT DEFAULT 'ollama-gemma4-e4b',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   user_id TEXT DEFAULT 'anonymous'
 );
@@ -115,4 +115,61 @@ CREATE POLICY "Allow public inserts on job_opportunities" ON job_opportunities
   FOR INSERT TO public WITH CHECK (true);
 
 CREATE POLICY "Allow public reads on job_opportunities" ON job_opportunities
+  FOR SELECT TO public USING (true);
+
+-- ===== 24/7 PIPELINE OPPORTUNITIES TABLE =====
+CREATE TABLE IF NOT EXISTS pipeline_opportunities (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  external_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_name TEXT NOT NULL,
+  title TEXT NOT NULL,
+  company TEXT NOT NULL,
+  location TEXT,
+  salary TEXT,
+  skills TEXT[],
+  type TEXT NOT NULL DEFAULT 'job',
+  url TEXT,
+  discovered_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_po_source ON pipeline_opportunities(source);
+CREATE INDEX IF NOT EXISTS idx_po_type ON pipeline_opportunities(type);
+CREATE INDEX IF NOT EXISTS idx_po_discovered ON pipeline_opportunities(discovered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_po_company ON pipeline_opportunities(company);
+CREATE INDEX IF NOT EXISTS idx_po_skills ON pipeline_opportunities USING GIN(skills);
+
+ALTER TABLE pipeline_opportunities ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public inserts on pipeline_opportunities" ON pipeline_opportunities
+  FOR INSERT TO public WITH CHECK (true);
+
+CREATE POLICY "Allow public reads on pipeline_opportunities" ON pipeline_opportunities
+  FOR SELECT TO public USING (true);
+
+-- ===== 24/7 PIPELINE RUNS TABLE =====
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  cycle_id INTEGER NOT NULL,
+  time TEXT NOT NULL,
+  source TEXT NOT NULL,
+  new_items INTEGER NOT NULL DEFAULT 0,
+  duplicates INTEGER NOT NULL DEFAULT 0,
+  duration TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'success',
+  search_type TEXT NOT NULL DEFAULT 'auto',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pr_cycle ON pipeline_runs(cycle_id DESC);
+CREATE INDEX IF NOT EXISTS idx_pr_time ON pipeline_runs(time DESC);
+CREATE INDEX IF NOT EXISTS idx_pr_status ON pipeline_runs(status);
+
+ALTER TABLE pipeline_runs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public inserts on pipeline_runs" ON pipeline_runs
+  FOR INSERT TO public WITH CHECK (true);
+
+CREATE POLICY "Allow public reads on pipeline_runs" ON pipeline_runs
   FOR SELECT TO public USING (true);

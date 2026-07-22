@@ -17,15 +17,23 @@
       <div class="logo-icon">A</div>
       <div class="logo-text"><span>Agent</span>Career</div>
     </a>
-    <nav class="nav-links">
+    <nav class="nav-links" id="mainNavLinks">
       <button class="nav-link active" data-view="home" onclick="showView('home')">Home</button>
-      <button class="nav-link" data-view="broadcast" onclick="showView('broadcast')">Broadcast Hub</button>
+      <button class="nav-link nav-admin-only" data-view="broadcast" id="navBroadcast" onclick="showView('broadcast')">Broadcast Hub</button>
       <button class="nav-link" data-view="autoapply" onclick="showView('autoapply')">Auto-Apply</button>
       <button class="nav-link" data-view="funding" onclick="showView('funding')">Funding Matcher</button>
     </nav>
   </div>
   <div class="header-right">
-    <div class="theme-toggle" onclick="toggleTheme()">
+    <div id="userHeaderBadge" style="display:flex;align-items:center;gap:10px;">
+      <span id="userBadgeText" style="font-size:12px;font-weight:600;padding:6px 12px;background:var(--primary-light);color:var(--primary);border-radius:20px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;">
+        <i class="fas fa-user-shield"></i> Guest
+      </span>
+      <button id="authHeaderBtn" class="btn-primary" onclick="showView('auth')" style="font-size:12px;padding:6px 14px;">
+        <i class="fas fa-right-to-bracket"></i> Sign In / Sign Up
+      </button>
+    </div>
+    <div class="theme-toggle" onclick="toggleTheme()" style="margin-left:8px;">
       <i class="fas fa-sun icon" id="themeIcon"></i>
       <span class="theme-toggle-label" id="themeLabel">Light</span>
     </div>
@@ -72,7 +80,7 @@
     </div>
 
     <div class="nav-grid">
-      <div class="nav-card animate-in stagger-1" onclick="showView('broadcast')">
+      <div class="nav-card animate-in stagger-1 nav-admin-only" id="homeCardBroadcast" onclick="showView('broadcast')">
         <div class="nav-card-icon blue"><i class="fas fa-broadcast-tower"></i></div>
         <h3>Broadcast Hub</h3>
         <p>Aggregate freshly scraped opportunities and instantly notify targeted student groups via WhatsApp dispatch.</p>
@@ -142,63 +150,180 @@
 
 <!-- ===== BROADCAST HUB VIEW ===== -->
 <div class="view" id="view-broadcast">
-  <div class="module-header">
-    <div class="module-header-left">
-      <button class="back-btn" onclick="showView('home')"><i class="fas fa-arrow-left"></i> Home</button>
-      <div>
-        <div class="module-title">Broadcast Hub</div>
-        <div class="module-subtitle">Live opportunity feed & WhatsApp dispatch</div>
-      </div>
-    </div>
-    <div class="live-badge"><span class="dot"></span> Scraper Agent Active</div>
-  </div>
-
-  <div class="module-body">
-    <div class="module-body-flex">
-      <div class="broadcast-feed">
-        <div class="feed-header">
-          <div class="feed-title"><i class="fas fa-bolt" style="color:var(--amber);margin-right:6px;"></i> Live Opportunity Feed</div>
-          <span style="font-size:12px;color:var(--text-muted);">Auto-refreshing every 30s</span>
-        </div>
-        <div class="opportunity-list" id="oppFeed"></div>
-      </div>
-
-      <div class="broadcast-panel">
-        <div class="panel-title"><i class="fab fa-whatsapp" style="color:#25D366;margin-right:6px;"></i> WhatsApp Dispatch</div>
-
-        <div class="form-group">
-          <label class="form-label">Target Student Group</label>
-          <select class="form-select" id="broadcastGroup">
-            <option value="">Select a group...</option>
-            <option value="cs-seniors">CS Seniors (2026 Batch)</option>
-            <option value="ml-enthusiasts">ML/AI Enthusiasts Club</option>
-            <option value="fullstack-devs">Full-Stack Developers</option>
-            <option value="data-science">Data Science Cohort</option>
-            <option value="all">All Groups (Broadcast)</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Message Preview</label>
-          <div class="broadcast-preview" id="broadcastPreview">
-            <strong>New Opportunity Alert!</strong><br><br>
-            Select a group and opportunities will be compiled into a broadcast message here. The AI agent formats and dispatches messages automatically.
+  <div class="broadcast-hub-layout">
+    <!-- Main Content -->
+    <div class="broadcast-main">
+      <!-- Header -->
+      <div class="broadcast-hub-header">
+        <div class="broadcast-hub-title-row">
+          <div>
+            <div class="broadcast-hub-logo"><i class="fas fa-broadcast-tower"></i> AgentCareer</div>
+            <h1 class="broadcast-hub-title">Opportunity Discovery</h1>
+            <p class="broadcast-hub-subtitle">Auto-discovered from trusted job sources and career platforms</p>
+          </div>
+          <div class="broadcast-hub-stats">
+            <div class="stat-pill" id="totalOppsPill"><i class="fas fa-briefcase"></i> <span id="totalOppsCount">0</span> total</div>
           </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Custom Note (Optional)</label>
-          <textarea class="form-textarea" rows="3" placeholder="Add a personal note to the broadcast..."></textarea>
+        <!-- Pipeline Agent Trigger Panel (same template as auto-apply) -->
+        <div class="pipeline-trigger-panel" id="pipelineTriggerPanel">
+          <div class="pipeline-panel-header">
+            <div class="pipeline-title-group">
+              <div class="pipeline-icon-badge running" id="pipelineBadge"><i class="fas fa-robot"></i></div>
+              <div>
+                <h3>24/7 Autonomous Job Discovery Agent</h3>
+                <p>Continuously scrapes LinkedIn, Indeed, Naukri, Glassdoor, Wellfound, and more. Runs around the clock.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Initial Trigger Buttons State -->
+          <div class="pipeline-trigger-actions" id="pipelineTriggerButtons">
+            <button id="btnStartPipeline" class="btn-pipeline-trigger start" onclick="startDiscoveryPipeline()">
+              <i class="fas fa-play"></i> Start 24/7 Discovery
+            </button>
+          </div>
+
+          <!-- Live Running / Stopped Status Bar -->
+          <div class="pipeline-status-bar" id="pipelineStatusBar" style="display:none;">
+            <div class="pipeline-status-left">
+              <div class="pipeline-pulse-badge" id="pipelineStatusBadge">
+                <span class="pulse-dot"></span>
+                <span id="pipelineStatusLabel">Agent Active — Searching Cycle <strong id="pipelineCycleNum">0</strong></span>
+              </div>
+              <div class="pipeline-live-subtext" id="pipelineLiveSubtext">
+                Source: <strong id="pipelineSourceLabel">—</strong> &bull; Discovered: <strong id="pipelineTotalDiscovered">0</strong> &bull; Duplicates: <strong id="pipelineTotalDups">0</strong>
+              </div>
+            </div>
+            <div class="pipeline-status-right">
+              <button id="btnStopPipeline" class="btn-pipeline-stop" onclick="stopDiscoveryPipeline()">
+                <i class="fas fa-circle-stop"></i> Stop Discovery
+              </button>
+            </div>
+          </div>
         </div>
 
-        <button class="btn-primary" onclick="broadcastAlert()">
-          <i class="fab fa-whatsapp"></i> Broadcast to Group
-        </button>
+        <!-- Search Bar -->
+        <div class="broadcast-search-bar">
+          <i class="fas fa-search search-icon"></i>
+          <input type="text" id="broadcastSearch" placeholder="Search opportunities by title, company, or skills..." oninput="filterBroadcastOpps()">
+          <button class="btn-search" onclick="filterBroadcastOpps()"><i class="fas fa-search"></i> Search</button>
+        </div>
 
-        <div style="margin-top:16px; padding:14px; background:var(--bg-secondary); border-radius:10px; font-size:12px; color:var(--text-muted);">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Last broadcast:</span><span style="color:var(--text-primary);font-weight:600;">12 min ago</span></div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Recipients:</span><span style="color:var(--text-primary);font-weight:600;">CS Seniors (84)</span></div>
-          <div style="display:flex;justify-content:space-between;"><span>Opportunities sent:</span><span style="color:var(--text-primary);font-weight:600;">7</span></div>
+        <!-- Filters -->
+        <div class="broadcast-filters">
+          <div class="filter-label"><i class="fas fa-filter"></i> Filters</div>
+          <div class="filter-grid">
+            <div class="filter-item">
+              <label>Company</label>
+              <input type="text" id="filterCompany" placeholder="e.g., Google" oninput="filterBroadcastOpps()">
+            </div>
+            <div class="filter-item">
+              <label>Location</label>
+              <input type="text" id="filterLocation" placeholder="e.g., Remote" oninput="filterBroadcastOpps()">
+            </div>
+            <div class="filter-item">
+              <label>Skills</label>
+              <input type="text" id="filterSkills" placeholder="e.g., python, react" oninput="filterBroadcastOpps()">
+            </div>
+            <div class="filter-item">
+              <label>Job Type</label>
+              <select id="filterType" onchange="filterBroadcastOpps()">
+                <option value="all">All Types</option>
+                <option value="job">Full-time</option>
+                <option value="internship">Internship</option>
+              </select>
+            </div>
+            <div class="filter-item">
+              <label>Source</label>
+              <input type="text" id="filterSource" placeholder="e.g., LinkedIn" oninput="filterBroadcastOpps()">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Stream Header (shown when pipeline is active) -->
+      <div class="live-stream-header" id="liveStreamHeader" style="display:none;">
+        <div class="stream-title-bar">
+          <div class="stream-title"><i class="fas fa-bolt" style="color:var(--amber);"></i> Live Streamed Opportunities</div>
+          <div class="stream-counter" id="pipelineStreamCounter">0 Opportunities Discovered</div>
+        </div>
+      </div>
+
+      <!-- Opportunity Grid -->
+      <div class="broadcast-opp-grid" id="broadcastOppGrid"></div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="broadcast-sidebar">
+      <!-- Pipeline Status Card -->
+      <div class="sidebar-card pipeline-status-card" id="pipelineSidebarCard">
+        <div class="sidebar-card-header">
+          <i class="fas fa-chart-line"></i>
+          <span>Pipeline Status</span>
+        </div>
+        <div class="pipeline-metrics">
+          <div class="pipeline-metric">
+            <div class="pm-value" id="pmCycleCount">0</div>
+            <div class="pm-label">Cycles</div>
+          </div>
+          <div class="pipeline-metric">
+            <div class="pm-value" id="pmDiscovered">0</div>
+            <div class="pm-label">Discovered</div>
+          </div>
+          <div class="pipeline-metric">
+            <div class="pm-value" id="pmDuplicates">0</div>
+            <div class="pm-label">Duplicates</div>
+          </div>
+          <div class="pipeline-metric">
+            <div class="pm-value" id="pmSources">8</div>
+            <div class="pm-label">Sources</div>
+          </div>
+        </div>
+        <div class="pipeline-status-footer">
+          <span id="pipelineStatusFooterText"><i class="fas fa-circle" style="color:var(--text-muted);font-size:8px;"></i> Stopped</span>
+        </div>
+      </div>
+
+      <!-- Broadcast Panel -->
+      <div class="sidebar-card broadcast-dispatch-card">
+        <div class="sidebar-card-header">
+          <i class="fab fa-whatsapp" style="color:#25D366;"></i>
+          <span>WhatsApp Dispatch</span>
+        </div>
+        <div class="selected-count" id="selectedCount">
+          <i class="fas fa-check-circle"></i> <span id="selectedNum">0</span> opportunities selected
+        </div>
+        <div class="sidebar-form-group">
+          <label>Message Template</label>
+          <select class="sidebar-select" id="broadcastTemplate" onchange="updateBroadcastPreview()">
+            <option value="standard">Standard Alert</option>
+            <option value="urgent">Urgent — Deadline Soon</option>
+            <option value="weekly">Weekly Digest</option>
+            <option value="custom">Custom Message</option>
+          </select>
+        </div>
+        <div class="broadcast-preview-box" id="broadcastPreview">
+          Click opportunities to select them...
+        </div>
+        <div class="sidebar-form-group" id="customNoteGroup" style="display:none;">
+          <label>Custom Note</label>
+          <textarea class="sidebar-textarea" id="customNote" rows="2" placeholder="Add a note..."></textarea>
+        </div>
+        <button class="btn-dispatch" id="broadcastBtn" onclick="broadcastToGroup()" disabled>
+          <i class="fab fa-whatsapp"></i> Broadcast Now
+        </button>
+      </div>
+
+      <!-- Recent Runs -->
+      <div class="sidebar-card recent-runs-card">
+        <div class="sidebar-card-header">
+          <i class="fas fa-history"></i>
+          <span>Recent Runs</span>
+        </div>
+        <div class="recent-runs-list" id="recentRunsList">
+          <div class="recent-run-empty">No runs yet. Start the pipeline to see results.</div>
         </div>
       </div>
     </div>
@@ -341,29 +466,9 @@
       </div>
     </div>
 
-    <div class="job-discovery">
-      <div class="job-discovery-header">
-        <h3><i class="fas fa-compass" style="color:var(--teal);margin-right:8px;"></i> Job Discovery Feed</h3>
-        <button class="btn-secondary"><i class="fas fa-sliders"></i> Filters</button>
-      </div>
-      <div class="job-feed" id="jobFeed"></div>
-    </div>
 
-    <div class="rag-search-section">
-      <h3><i class="fas fa-database" style="color:var(--primary);margin-right:8px;"></i> Resume RAG Search</h3>
-      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Search stored resumes using AI-powered retrieval. The AI agent uses this data to match candidates to jobs.</p>
-      
-      <div class="search-input-group">
-        <input type="text" id="resumeSearchInput" class="form-input" placeholder="Search resumes by skill, name, or keyword..." onkeyup="searchResumes(this.value)" style="flex:1;">
-        <button class="btn-primary" onclick="searchResumes(document.getElementById('resumeSearchInput').value)" style="width:auto;padding:10px 20px;">
-          <i class="fas fa-search"></i> Search
-        </button>
-      </div>
-      
-      <div id="searchResults" style="margin-top:16px;">
-        <p style="color:var(--text-muted);font-size:13px;">Type to search resumes...</p>
-      </div>
-    </div>
+
+
 
     <div class="kanban-section">
       <h3><i class="fas fa-columns" style="color:var(--primary);margin-right:8px;"></i> Application Tracker</h3>
@@ -489,6 +594,78 @@
         <h3><i class="fas fa-trophy" style="color:var(--amber);margin-right:8px;"></i> Matched Funding Opportunities</h3>
         <div class="grant-list" id="grantList"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AUTH / LOGIN / SIGN UP VIEW ===== -->
+<div class="view" id="view-auth">
+  <div class="module-header">
+    <div class="module-header-left">
+      <button class="back-btn" onclick="showView('home')"><i class="fas fa-arrow-left"></i> Home</button>
+      <div>
+        <div class="module-title">Portal Access & Account Management</div>
+        <div class="module-subtitle">Sign in as Administrator or Register a new Student Account</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="module-body" style="max-width:540px;margin:30px auto;">
+    <div class="compose-card" style="padding:28px;">
+      <div style="display:flex;gap:12px;margin-bottom:24px;border-bottom:1px solid var(--border-color);padding-bottom:12px;">
+        <button id="tabAuthLogin" class="btn-primary" onclick="switchAuthTab('login')" style="flex:1;">
+          <i class="fas fa-key"></i> Sign In
+        </button>
+        <button id="tabAuthRegister" class="btn-secondary" onclick="switchAuthTab('register')" style="flex:1;">
+          <i class="fas fa-user-plus"></i> Student Sign Up
+        </button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="authLoginForm" onsubmit="handleAuthLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Username / Email *</label>
+          <input type="text" id="authLoginEmail" class="form-input" placeholder="admin or student@domain.com" required>
+          <span style="font-size:11px;color:var(--text-muted);display:block;margin-top:4px;">
+            <i class="fas fa-info-circle"></i> Administrator login: <strong style="color:var(--primary);">admin</strong>
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password *</label>
+          <input type="password" id="authLoginPassword" class="form-input" placeholder="Enter password" required>
+        </div>
+
+        <div id="authLoginMsg" style="font-size:12px;margin-bottom:12px;display:none;"></div>
+
+        <button type="submit" class="btn-primary" style="width:100%;padding:12px;">
+          <i class="fas fa-right-to-bracket"></i> Sign In to Portal
+        </button>
+      </form>
+
+      <!-- Register Form -->
+      <form id="authRegisterForm" onsubmit="handleAuthRegister(event)" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Full Name *</label>
+          <input type="text" id="authRegName" class="form-input" placeholder="e.g. Yashwant" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Student Email *</label>
+          <input type="email" id="authRegEmail" class="form-input" placeholder="student@university.edu" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Create Password *</label>
+          <input type="password" id="authRegPassword" class="form-input" placeholder="Choose a password" required>
+        </div>
+
+        <div id="authRegMsg" style="font-size:12px;margin-bottom:12px;display:none;"></div>
+
+        <button type="submit" class="btn-primary" style="width:100%;padding:12px;background:var(--teal);">
+          <i class="fas fa-user-check"></i> Register Student Account
+        </button>
+      </form>
     </div>
   </div>
 </div>

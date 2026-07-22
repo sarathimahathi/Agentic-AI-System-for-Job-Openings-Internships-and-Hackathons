@@ -134,13 +134,166 @@ function extractSummary(text, filename) {
   return firstLines.substring(0, 500) || `Resume: ${filename}`;
 }
 
+// ===== AUTHENTICATION & ROLE-BASED ACCESS CONTROL =====
+const ADMIN_EMAIL = 'admin';
+const ADMIN_PASS = 'admin@123';
+
+let currentUser = JSON.parse(localStorage.getItem('agentcareer_user') || 'null');
+let registeredUsers = JSON.parse(localStorage.getItem('agentcareer_users') || '[]');
+
+function updateAuthUI() {
+  const badgeEl = document.getElementById('userBadgeText');
+  const btnEl = document.getElementById('authHeaderBtn');
+  const adminElements = document.querySelectorAll('.nav-admin-only');
+
+  if (currentUser) {
+    if (currentUser.role === 'admin') {
+      badgeEl.style.background = 'var(--primary-light)';
+      badgeEl.style.color = 'var(--primary)';
+      badgeEl.innerHTML = `<i class="fas fa-shield-halved"></i> Admin: ${currentUser.name || 'Shyam'}`;
+      adminElements.forEach(el => el.style.display = '');
+    } else {
+      badgeEl.style.background = 'var(--teal-light)';
+      badgeEl.style.color = 'var(--teal)';
+      badgeEl.innerHTML = `<i class="fas fa-user-graduate"></i> Student: ${currentUser.name || 'User'}`;
+      adminElements.forEach(el => el.style.display = 'none');
+    }
+
+    btnEl.innerHTML = '<i class="fas fa-arrow-right-from-bracket"></i> Logout';
+    btnEl.onclick = handleLogout;
+  } else {
+    badgeEl.style.background = 'var(--bg-secondary)';
+    badgeEl.style.color = 'var(--text-muted)';
+    badgeEl.innerHTML = '<i class="fas fa-user-circle"></i> Guest Mode';
+    adminElements.forEach(el => el.style.display = 'none');
+
+    btnEl.innerHTML = '<i class="fas fa-right-to-bracket"></i> Sign In / Sign Up';
+    btnEl.onclick = () => showView('auth');
+  }
+}
+
+function handleLogout() {
+  currentUser = null;
+  localStorage.removeItem('agentcareer_user');
+  updateAuthUI();
+  showView('auth');
+}
+
+function switchAuthTab(tab) {
+  const loginForm = document.getElementById('authLoginForm');
+  const regForm = document.getElementById('authRegisterForm');
+  const tabLogin = document.getElementById('tabAuthLogin');
+  const tabReg = document.getElementById('tabAuthRegister');
+
+  if (tab === 'login') {
+    loginForm.style.display = 'block';
+    regForm.style.display = 'none';
+    tabLogin.className = 'btn-primary';
+    tabReg.className = 'btn-secondary';
+  } else {
+    loginForm.style.display = 'none';
+    regForm.style.display = 'block';
+    tabLogin.className = 'btn-secondary';
+    tabReg.className = 'btn-primary';
+  }
+}
+
+function handleAuthLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('authLoginEmail').value.trim();
+  const pass = document.getElementById('authLoginPassword').value.trim();
+  const msgEl = document.getElementById('authLoginMsg');
+
+  msgEl.style.display = 'block';
+
+  if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && pass === ADMIN_PASS) {
+    currentUser = {
+      email: ADMIN_EMAIL,
+      name: 'Shyam (Admin)',
+      role: 'admin'
+    };
+    localStorage.setItem('agentcareer_user', JSON.stringify(currentUser));
+    msgEl.style.color = 'var(--green)';
+    msgEl.textContent = 'Admin Sign-In Successful! Redirecting...';
+    updateAuthUI();
+    setTimeout(() => showView('home'), 600);
+  } else {
+    // Check local student registry
+    const foundUser = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === pass);
+    if (foundUser) {
+      currentUser = {
+        email: foundUser.email,
+        name: foundUser.name,
+        role: 'student'
+      };
+      localStorage.setItem('agentcareer_user', JSON.stringify(currentUser));
+      msgEl.style.color = 'var(--teal)';
+      msgEl.textContent = 'Student Sign-In Successful! Redirecting...';
+      updateAuthUI();
+      setTimeout(() => showView('autoapply'), 600);
+    } else {
+      msgEl.style.color = 'var(--red)';
+      msgEl.textContent = 'Invalid credentials. Please try again or sign up.';
+    }
+  }
+}
+
+function handleAuthRegister(e) {
+  e.preventDefault();
+  const name = document.getElementById('authRegName').value.trim();
+  const email = document.getElementById('authRegEmail').value.trim();
+  const pass = document.getElementById('authRegPassword').value;
+  const msgEl = document.getElementById('authRegMsg');
+
+  // Check if already registered
+  if (registeredUsers.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+    msgEl.style.display = 'block';
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'Email already registered. Please sign in.';
+    return;
+  }
+
+  // Register user
+  const newUser = { email, name, password: pass };
+  registeredUsers.push(newUser);
+  localStorage.setItem('agentcareer_users', JSON.stringify(registeredUsers));
+
+  currentUser = {
+    email: email,
+    name: name,
+    role: 'student'
+  };
+  localStorage.setItem('agentcareer_user', JSON.stringify(currentUser));
+
+  msgEl.style.display = 'block';
+  msgEl.style.color = 'var(--green)';
+  msgEl.textContent = 'Student Account Registered! Redirecting to Auto-Apply...';
+
+  updateAuthUI();
+  setTimeout(() => showView('autoapply'), 600);
+}
+
 // ===== VIEW MANAGEMENT =====
 function showView(view) {
+  // Guard access to admin-only views
+  if (view === 'broadcast' && (!currentUser || currentUser.role !== 'admin')) {
+    alert('Access Restricted: Broadcast Hub is reserved exclusively for Administrators.');
+    view = 'autoapply';
+  }
+
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view-' + view).classList.add('active');
+  const targetView = document.getElementById('view-' + view);
+  if (targetView) targetView.classList.add('active');
 
   document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-  document.querySelector(`.nav-link[data-view="${view}"]`).classList.add('active');
+  const activeNav = document.querySelector(`.nav-link[data-view="${view}"]`);
+  if (activeNav) activeNav.classList.add('active');
+
+  // Initialize broadcast hub when shown
+  if (view === 'broadcast') {
+    renderBroadcastOpps();
+    pollPipelineRuns();
+  }
 
   window.scrollTo(0, 0);
 }
@@ -171,34 +324,359 @@ function animateMetric(id, target, prefix = '', suffix = '') {
   }, 30);
 }
 
-// ===== POPULATE OPPORTUNITY FEED =====
-const opportunities = [
-  { source: 'linkedin', icon: 'fab fa-linkedin', title: 'Senior Full-Stack Engineer', company: 'Stripe', location: 'Remote (US)', salary: '$150k - $200k', time: '2m ago' },
-  { source: 'naukri', icon: 'fas fa-briefcase', title: 'ML Research Intern', company: 'Google Research India', location: 'Bangalore', salary: '₹80k/mo', time: '5m ago' },
-  { source: 'indeed', icon: 'fas fa-search', title: 'DevOps Engineer', company: 'GitLab', location: 'Remote (Global)', salary: '$130k - $170k', time: '8m ago' },
-  { source: 'glassdoor', icon: 'fas fa-star', title: 'Backend Engineer (Go/Rust)', company: 'Cloudflare', location: 'Austin, TX', salary: '$140k - $180k', time: '12m ago' },
-  { source: 'linkedin', icon: 'fab fa-linkedin', title: 'Data Scientist', company: 'Netflix', location: 'Los Gatos, CA', salary: '$160k - $220k', time: '15m ago' },
-  { source: 'naukri', icon: 'fas fa-briefcase', title: 'Frontend Developer (React)', company: 'Razorpay', location: 'Bangalore', salary: '₹45k/mo', time: '18m ago' },
-  { source: 'indeed', icon: 'fas fa-search', title: 'Platform Engineer', company: 'HashiCorp', location: 'Remote', salary: '$145k - $185k', time: '22m ago' },
-  { source: 'glassdoor', icon: 'fas fa-star', title: 'AI/ML Engineer', company: 'Anthropic', location: 'San Francisco', salary: '$180k - $250k', time: '25m ago' },
-];
+// ===== BROADCAST HUB — 24/7 PIPELINE =====
 
-function renderOpportunities() {
-  const container = document.getElementById('oppFeed');
-  container.innerHTML = opportunities.map(o => `
-    <div class="opportunity-card">
-      <div class="opp-source-icon ${o.source}"><i class="${o.icon}"></i></div>
-      <div class="opp-info">
-        <h4>${o.title}</h4>
-        <div class="opp-company">${o.company}</div>
-        <div class="opp-meta">
+const PIPELINE_BASE = 'http://localhost:5000/api/pipeline';
+
+let pipelineOpps = [];
+let pipelineSelectedOpps = new Set();
+let pipelinePollInterval = null;
+let pipelineFeedPollInterval = null;
+let pipelineRunning = false;
+
+const broadcastTemplates = {
+  standard: (opps) => {
+    if (!opps.length) return 'Click opportunities to select them...';
+    const list = opps.map(o => `• ${o.title} at ${o.company}${o.url ? `\n  🔗 ${o.url}` : ''}`).join('\n');
+    return `🚀 New Opportunity Alert!\n\n${opps.length} new opportunities:\n\n${list}\n\nApply now on AgentCareer!`;
+  },
+  urgent: (opps) => {
+    if (!opps.length) return 'Click opportunities to select them...';
+    const list = opps.map(o => `• ${o.title} at ${o.company} — Deadline soon!${o.url ? `\n  🔗 ${o.url}` : ''}`).join('\n');
+    return `⚠️ URGENT: Application Deadlines!\n\n${opps.length} roles closing soon:\n\n${list}\n\nApply before it's too late!`;
+  },
+  weekly: (opps) => {
+    if (!opps.length) return 'Click opportunities to select them...';
+    const list = opps.map(o => `• ${o.title} @ ${o.company}${o.url ? `\n  🔗 ${o.url}` : ''}`).join('\n');
+    return `📋 Weekly Opportunity Digest\n\nThis week's top ${opps.length} picks:\n\n${list}\n\nCurated by your AI Career Agent`;
+  },
+  custom: (opps) => {
+    const note = document.getElementById('customNote')?.value || '';
+    if (!opps.length) return note || 'Add your message and select opportunities.';
+    const list = opps.map(o => `• ${o.title} @ ${o.company}${o.url ? `\n  🔗 ${o.url}` : ''}`).join('\n');
+    return `${note}\n\n${list}`;
+  }
+};
+
+// ===== PIPELINE CONTROLS =====
+async function startDiscoveryPipeline() {
+  try {
+    const resp = await fetch(`${PIPELINE_BASE}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ search_type: 'auto' })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed to start pipeline');
+
+    pipelineRunning = true;
+
+    // Switch UI
+    document.getElementById('pipelineTriggerButtons').style.display = 'none';
+    document.getElementById('pipelineStatusBar').style.display = 'flex';
+    document.getElementById('liveStreamHeader').style.display = 'block';
+    document.getElementById('pipelineSidebarCard').querySelector('.pipeline-status-footer span').innerHTML = '<i class="fas fa-circle" style="color:var(--green);font-size:8px;"></i> Running';
+
+    const badge = document.getElementById('pipelineBadge');
+    if (badge) badge.className = 'pipeline-icon-badge running';
+
+    // Start polling status & feed
+    pipelinePollInterval = setInterval(pollPipelineStatus, 2000);
+    pipelineFeedPollInterval = setInterval(pollPipelineFeed, 3000);
+
+    // Immediate poll
+    pollPipelineStatus();
+    pollPipelineFeed();
+
+  } catch (err) {
+    console.error('Pipeline start error:', err);
+    alert('Error starting pipeline: ' + err.message);
+  }
+}
+
+async function stopDiscoveryPipeline() {
+  try {
+    document.getElementById('btnStopPipeline').disabled = true;
+    document.getElementById('btnStopPipeline').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Stopping...';
+
+    await fetch(`${PIPELINE_BASE}/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    console.warn('Pipeline stop error:', err);
+  }
+}
+
+async function pollPipelineStatus() {
+  try {
+    const resp = await fetch(`${PIPELINE_BASE}/status`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    if (!data.running) {
+      stopPipelineUI(data);
+    }
+
+    // Update status bar
+    const cycleEl = document.getElementById('pipelineCycleNum');
+    if (cycleEl) cycleEl.textContent = data.cycle_count || 0;
+
+    const sourceEl = document.getElementById('pipelineSourceLabel');
+    if (sourceEl) sourceEl.textContent = data.current_source || '—';
+
+    const discoveredEl = document.getElementById('pipelineTotalDiscovered');
+    if (discoveredEl) discoveredEl.textContent = data.total_discovered || 0;
+
+    const dupsEl = document.getElementById('pipelineTotalDups');
+    if (dupsEl) dupsEl.textContent = data.total_duplicates || 0;
+
+    // Update sidebar metrics
+    const pmCycle = document.getElementById('pmCycleCount');
+    if (pmCycle) pmCycle.textContent = data.cycle_count || 0;
+    const pmDisc = document.getElementById('pmDiscovered');
+    if (pmDisc) pmDisc.textContent = data.total_discovered || 0;
+    const pmDups = document.getElementById('pmDuplicates');
+    if (pmDups) pmDups.textContent = data.total_duplicates || 0;
+
+  } catch (err) {
+    // Backend not reachable
+  }
+}
+
+function stopPipelineUI(data) {
+  if (!pipelineRunning) return;
+  pipelineRunning = false;
+
+  if (pipelinePollInterval) {
+    clearInterval(pipelinePollInterval);
+    pipelinePollInterval = null;
+  }
+  if (pipelineFeedPollInterval) {
+    clearInterval(pipelineFeedPollInterval);
+    pipelineFeedPollInterval = null;
+  }
+
+  document.getElementById('pipelineStatusBadge').className = 'pipeline-pulse-badge stopped';
+  document.getElementById('pipelineStatusBadge').innerHTML = `<i class="fas fa-lock" style="color:var(--amber);margin-right:6px;"></i><span>Agent Stopped &mdash; Final Dashboard State Locked (Cycle ${data?.cycle_count || 0})</span>`;
+
+  const stopBtn = document.getElementById('btnStopPipeline');
+  if (stopBtn) {
+    stopBtn.disabled = false;
+    stopBtn.innerHTML = '<i class="fas fa-rotate-left"></i> Start New Discovery';
+    stopBtn.className = 'btn-pipeline-restart';
+    stopBtn.onclick = startDiscoveryPipeline;
+  }
+
+  document.getElementById('pipelineSidebarCard').querySelector('.pipeline-status-footer span').innerHTML = '<i class="fas fa-circle" style="color:var(--text-muted);font-size:8px;"></i> Stopped';
+}
+
+async function pollPipelineFeed() {
+  try {
+    const resp = await fetch(`${PIPELINE_BASE}/feed?limit=50`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    if (data.feed && data.feed.length > 0) {
+      // Merge with existing
+      const existingIds = new Set(pipelineOpps.map(o => o.id));
+      const newOpps = data.feed.filter(o => !existingIds.has(o.id));
+
+      if (newOpps.length > 0) {
+        pipelineOpps = [...newOpps, ...pipelineOpps];
+        if (pipelineOpps.length > 100) pipelineOpps = pipelineOpps.slice(0, 100);
+        renderBroadcastOpps();
+      }
+    }
+  } catch (err) {
+    // Backend not reachable
+  }
+}
+
+async function pollPipelineRuns() {
+  try {
+    const resp = await fetch(`${PIPELINE_BASE}/runs?limit=20`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.runs) {
+      renderRecentRuns(data.runs);
+    }
+  } catch (err) {
+    // Backend not reachable
+  }
+}
+
+// ===== RENDER OPPORTUNITY GRID =====
+function renderBroadcastOpps(filteredOpps) {
+  const container = document.getElementById('broadcastOppGrid');
+  if (!container) return;
+
+  const opps = filteredOpps || pipelineOpps;
+
+  if (opps.length === 0) {
+    const hasFilter = ['broadcastSearch','filterCompany','filterLocation','filterSkills','filterSource'].some(id => {
+      const el = document.getElementById(id);
+      return el && el.value.trim();
+    });
+    if (hasFilter) {
+      container.innerHTML = `<div class="empty-pipeline-state" style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-muted);"><div style="font-size:48px;margin-bottom:16px;"><i class="fas fa-search"></i></div><h3 style="font-size:18px;color:var(--text-secondary);margin-bottom:8px;">No Matching Opportunities</h3><p>Try adjusting your search or filters.</p><button class="btn-outline" onclick="clearBroadcastFilters()" style="margin-top:16px;"><i class="fas fa-times"></i> Clear Filters</button></div>`;
+    } else {
+      container.innerHTML = `
+        <div class="empty-pipeline-state" style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-muted);">
+          <div style="font-size:48px;margin-bottom:16px;"><i class="fas fa-robot"></i></div>
+          <h3 style="font-size:18px;color:var(--text-secondary);margin-bottom:8px;">No Opportunities Yet</h3>
+          <p>Start the 24/7 Discovery Pipeline to begin aggregating opportunities from all sources.</p>
+          <button class="btn-pipeline-trigger start" onclick="startDiscoveryPipeline()" style="margin-top:20px;display:inline-flex;"><i class="fas fa-play"></i> Start 24/7 Discovery</button>
+        </div>
+      `;
+    }
+    return;
+  }
+
+  container.innerHTML = opps.map(o => {
+    const isSelected = pipelineSelectedOpps.has(o.id);
+    return `
+      <div class="broadcast-opp-card ${isSelected ? 'selected' : ''}" onclick="togglePipelineOppSelection('${o.id}')">
+        <div class="opp-card-header">
+          <div class="opp-card-source ${o.source}"><i class="${o.icon}"></i></div>
+          <div style="flex:1;min-width:0;">
+            <div class="opp-card-title">${o.title}</div>
+            <div class="opp-card-company"><i class="fas fa-building"></i> ${o.company}</div>
+          </div>
+          <span class="opp-card-type ${o.type}">${o.type === 'internship' ? 'Internship' : 'Full-time'}</span>
+        </div>
+        <div class="opp-card-meta">
           <span><i class="fas fa-location-dot"></i> ${o.location}</span>
-          <span><i class="fas fa-money-bill"></i> ${o.salary}</span>
+          <span><i class="fas fa-money-bill-wave"></i> ${o.salary}</span>
+          <span><i class="fas fa-clock"></i> ${o.time}</span>
+        </div>
+        <div class="opp-card-tags">
+          ${(o.skills || []).map(s => `<span class="opp-card-tag">${s}</span>`).join('')}
+        </div>
+        <div class="opp-card-footer">
+          <a href="${o.url || '#'}" target="_blank" class="btn-opp-details" onclick="event.stopPropagation()">View Details</a>
+          <a href="${o.url || '#'}" target="_blank" class="btn-opp-apply-sm" onclick="event.stopPropagation()"><i class="fas fa-external-link-alt"></i> Apply</a>
         </div>
       </div>
-      <div class="opp-time">${o.time}</div>
+    `;
+  }).join('');
+
+  const totalEl = document.getElementById('totalOppsCount');
+  if (totalEl) totalEl.textContent = pipelineOpps.length;
+
+  const streamCounter = document.getElementById('pipelineStreamCounter');
+  if (streamCounter) {
+    const filteredCount = opps.length;
+    streamCounter.textContent = filteredCount === pipelineOpps.length
+      ? `${pipelineOpps.length} Opportunities Discovered`
+      : `${filteredCount} of ${pipelineOpps.length} Opportunities`;
+  }
+
+  updateBroadcastPreview();
+}
+
+function filterBroadcastOpps() {
+  const search = (document.getElementById('broadcastSearch')?.value || '').toLowerCase();
+  const company = (document.getElementById('filterCompany')?.value || '').toLowerCase();
+  const location = (document.getElementById('filterLocation')?.value || '').toLowerCase();
+  const skills = (document.getElementById('filterSkills')?.value || '').toLowerCase();
+  const type = document.getElementById('filterType')?.value || 'all';
+  const source = (document.getElementById('filterSource')?.value || '').toLowerCase();
+
+  const filtered = pipelineOpps.filter(o => {
+    const matchSearch = !search || o.title.toLowerCase().includes(search) || o.company.toLowerCase().includes(search) || (o.skills || []).some(s => s.toLowerCase().includes(search));
+    const matchCompany = !company || o.company.toLowerCase().includes(company);
+    const matchLocation = !location || o.location.toLowerCase().includes(location);
+    const matchSkills = !skills || (o.skills || []).some(s => s.toLowerCase().includes(skills));
+    const matchType = type === 'all' || o.type === type;
+    const matchSource = !source || (o.source_name || o.source || '').toLowerCase().includes(source);
+    return matchSearch && matchCompany && matchLocation && matchSkills && matchType && matchSource;
+  });
+
+  renderBroadcastOpps(filtered);
+}
+
+function clearBroadcastFilters() {
+  ['broadcastSearch','filterCompany','filterLocation','filterSkills','filterSource'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const typeEl = document.getElementById('filterType');
+  if (typeEl) typeEl.value = 'all';
+  renderBroadcastOpps(pipelineOpps);
+}
+
+function renderRecentRuns(runs) {
+  const container = document.getElementById('recentRunsList');
+  if (!container) return;
+  if (!runs || runs.length === 0) {
+    container.innerHTML = '<div class="recent-run-empty">No runs yet. Start the pipeline to see results.</div>';
+    return;
+  }
+  container.innerHTML = runs.map(r => `
+    <div class="recent-run-item">
+      <div class="recent-run-icon ${r.status}"><i class="fas fa-check"></i></div>
+      <div class="recent-run-info">
+        <div class="recent-run-time">${r.time}</div>
+        <div class="recent-run-details">
+          <span class="recent-run-stat new"><i class="fas fa-plus-circle"></i> ${r.new} new</span>
+          <span class="recent-run-stat dups">${r.dups} dups</span>
+        </div>
+      </div>
+      <div class="recent-run-duration">${r.duration}</div>
     </div>
   `).join('');
+}
+
+function broadcastToGroup() {
+  if (pipelineSelectedOpps.size === 0) return;
+
+  const btn = document.getElementById('broadcastBtn');
+  const template = document.getElementById('broadcastTemplate')?.value || 'standard';
+  const selected = pipelineOpps.filter(o => pipelineSelectedOpps.has(o.id));
+  const message = broadcastTemplates[template](selected);
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Opening WhatsApp...';
+
+  // wa.me is WhatsApp's free official click-to-chat link — it opens WhatsApp
+  // (app or web) with the message pre-filled. WhatsApp doesn't let a website
+  // auto-pick one of your saved groups, so you pick the group/contact
+  // yourself in the picker that opens, then hit Send.
+  const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  window.open(waUrl, '_blank');
+
+  setTimeout(() => {
+    btn.innerHTML = '<i class="fab fa-whatsapp"></i> Broadcast Now';
+    btn.disabled = false;
+    pipelineSelectedOpps.clear();
+    renderBroadcastOpps();
+  }, 800);
+}
+
+function togglePipelineOppSelection(id) {
+  if (pipelineSelectedOpps.has(id)) {
+    pipelineSelectedOpps.delete(id);
+  } else {
+    pipelineSelectedOpps.add(id);
+  }
+  renderBroadcastOpps();
+  updatePipelineBroadcastBtn();
+}
+
+function updatePipelineBroadcastBtn() {
+  const btn = document.getElementById('broadcastBtn');
+  btn.disabled = pipelineSelectedOpps.size === 0;
+  document.getElementById('selectedNum').textContent = pipelineSelectedOpps.size;
+}
+
+function updateBroadcastPreview() {
+  const template = document.getElementById('broadcastTemplate')?.value || 'standard';
+  const customGroup = document.getElementById('customNoteGroup');
+  if (customGroup) customGroup.style.display = template === 'custom' ? 'block' : 'none';
+  const selected = pipelineOpps.filter(o => pipelineSelectedOpps.has(o.id));
+  const preview = document.getElementById('broadcastPreview');
+  if (preview) preview.textContent = broadcastTemplates[template](selected);
 }
 
 // ===== POPULATE JOB FEED =====
@@ -213,6 +691,7 @@ const jobs = [
 
 function renderJobs() {
   const container = document.getElementById('jobFeed');
+  if (!container) return;
   container.innerHTML = jobs.map(j => `
     <div class="job-card">
       <div class="job-card-top">
@@ -259,12 +738,9 @@ function renderGrants() {
   `).join('');
 }
 
-// ===== BROADCAST ALERT =====
+// ===== BROADCAST ALERT (Legacy) =====
 function broadcastAlert() {
-  const group = document.getElementById('broadcastGroup').value;
-  if (!group) { alert('Please select a target student group first.'); return; }
-  const count = group === 'all' ? '312' : group === 'cs-seniors' ? '84' : '45-60';
-  alert(`Broadcast sent successfully to ${count} students via WhatsApp!`);
+  broadcastToGroup();
 }
 
 // ===== MATCH GRANTS (re-render with animation) =====
@@ -345,7 +821,9 @@ function removeAttachedFile() {
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
-  renderOpportunities();
+  updateAuthUI();
+  renderBroadcastOpps();
+  pollPipelineRuns();
   renderJobs();
   renderGrants();
   animateMetric('metric-jobs', 1247);
@@ -419,11 +897,16 @@ async function analyzeATS() {
 
     status.textContent = 'Running multi-pass AI pipeline on local Ollama...';
 
-    const response = await fetch(FLASK_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(backendPayload),
-    });
+    let response;
+    try {
+      response = await fetch(FLASK_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backendPayload)
+      });
+    } catch (e) {
+      throw new Error('Flask Backend Unreachable: Cannot reach Flask backend at localhost:5000. Make sure the Python server is running: python app.py');
+    }
 
     const result = await response.json();
 
@@ -495,8 +978,8 @@ async function analyzeATS() {
         weaknesses: evaluation.weaknesses || [],
         recommendations: evaluation.recommendations || [],
         verdict: evaluation.verdict || '',
-        parsed_with: 'ollama-llama3.1-multi-pass',
-        user_id: 'anonymous',
+        parsed_with: 'ollama-gemma4-e4b-multi-pass',
+        user_id: currentUser ? currentUser.email : 'anonymous',
       });
     if (dbError) throw dbError;
 
@@ -578,10 +1061,12 @@ async function analyzeATS() {
   } catch (err) {
     console.error('Analyze error:', err);
     let userMessage = err.message;
-    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-      userMessage = 'Cannot reach Flask backend at localhost:5000. Make sure the Python server is running: python app.py';
+    if (err.message.includes('Flask Backend Unreachable')) {
+      userMessage = err.message.replace('Flask Backend Unreachable: ', '');
     } else if (err.message.includes('ollama') || err.message.includes('Ollama')) {
       userMessage = 'Ollama is unreachable. Make sure Ollama is running: ollama serve';
+    } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.message.includes('HTTP2')) {
+      userMessage = 'Network Error: Failed to communicate with Supabase. Check your internet connection or ad-blocker.';
     }
     status.style.display = 'inline';
     status.textContent = 'Error: ' + userMessage;
@@ -590,71 +1075,7 @@ async function analyzeATS() {
   }
 }
 
-// ===== RAG SEARCH FUNCTIONALITY =====
-async function searchResumes(query) {
-  const resultsContainer = document.getElementById('searchResults');
-  if (!query || query.trim().length === 0) {
-    resultsContainer.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">Type to search resumes...</p>';
-    return;
-  }
 
-  resultsContainer.innerHTML = '<p style="color:var(--text-muted);font-size:13px;"><i class="fas fa-spinner fa-spin"></i> Searching...</p>';
-
-  try {
-    // Search using text search function
-    const { data, error } = await sbClient.rpc('search_resumes_by_text', {
-      search_query: query,
-      match_count: 10
-    });
-
-    if (error) {
-      // Fallback to basic query if function doesn't exist
-      const { data: fallbackData, error: fallbackError } = await sbClient
-        .from('resumes')
-        .select('*')
-        .or(`file_name.ilike.%${query}%,extracted_text.ilike.%${query}%,summary.ilike.%${query}%`)
-        .order('upload_date', { ascending: false })
-        .limit(10);
-
-      if (fallbackError) throw fallbackError;
-      renderSearchResults(fallbackData, query);
-      return;
-    }
-
-    renderSearchResults(data, query);
-  } catch (err) {
-    resultsContainer.innerHTML = `<p style="color:var(--red);font-size:13px;">Search error: ${err.message}</p>`;
-  }
-}
-
-function renderSearchResults(results, query) {
-  const resultsContainer = document.getElementById('searchResults');
-  
-  if (!results || results.length === 0) {
-    resultsContainer.innerHTML = `<p style="color:var(--text-muted);font-size:13px;">No resumes found for "${query}"</p>`;
-    return;
-  }
-
-  resultsContainer.innerHTML = results.map(r => `
-    <div class="search-result-card">
-      <div class="search-result-header">
-        <i class="fas fa-file-alt" style="color:var(--primary);margin-right:8px;"></i>
-        <a href="${r.file_url}" target="_blank" style="color:var(--primary);text-decoration:none;font-weight:600;font-size:14px;">${r.file_name}</a>
-      </div>
-      <div class="search-result-meta">
-        <span><i class="fas fa-calendar" style="margin-right:4px;"></i>${new Date(r.upload_date).toLocaleDateString()}</span>
-        ${r.file_size ? `<span><i class="fas fa-file" style="margin-right:4px;"></i>${(r.file_size / 1024).toFixed(1)} KB</span>` : ''}
-      </div>
-      ${r.summary ? `<p class="search-result-summary">${r.summary}</p>` : ''}
-      ${r.skills && r.skills.length > 0 ? `
-        <div class="search-result-skills">
-          ${r.skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}
-        </div>
-      ` : ''}
-      ${r.similarity ? `<div class="search-result-score">Match: ${(r.similarity * 100).toFixed(1)}%</div>` : ''}
-    </div>
-  `).join('');
-}
 
 async function getAllResumes() {
   const { data, error } = await sbClient
@@ -927,8 +1348,38 @@ function createOpportunityCardHtml(opp) {
         <button class="btn-opp-save" onclick="this.innerHTML='<i class=\\'fas fa-check\\'></i> Saved'; this.style.borderColor='var(--green)';">
           <i class="far fa-bookmark"></i> Save
         </button>
+        <button class="btn-opp-whatsapp" onclick="shareSingleOppToWhatsApp('${encodeURIComponent(JSON.stringify(opp))}')">
+          <i class="fab fa-whatsapp"></i> Share
+        </button>
       </div>
     </div>
   `;
 }
 
+// ===== SHARE A SINGLE OPPORTUNITY TO WHATSAPP =====
+// Free, no API/keys: wa.me opens WhatsApp with the message pre-filled,
+// the user picks who to send it to and hits Send.
+function shareSingleOppToWhatsApp(encodedOpp) {
+  let opp;
+  try {
+    opp = JSON.parse(decodeURIComponent(encodedOpp));
+  } catch (err) {
+    console.error('Failed to parse opportunity for WhatsApp share:', err);
+    return;
+  }
+
+  const matchPct = opp.match_percentage ? Math.round(opp.match_percentage) : null;
+
+  const lines = [
+    `*${opp.title}* at *${opp.company}*`,
+    opp.location ? `📍 ${opp.location}` : null,
+    (opp.salary_range || opp.salary) ? `💰 ${opp.salary_range || opp.salary}` : null,
+    matchPct !== null ? `✅ Match: ${matchPct}%` : null,
+    (opp.matched_skills && opp.matched_skills.length) ? `Skills matched: ${opp.matched_skills.join(', ')}` : null,
+    (opp.opportunity_url || opp.url) ? `🔗 ${opp.opportunity_url || opp.url}` : null,
+    opp.platform ? `Found via ${opp.platform}` : null
+  ].filter(Boolean);
+
+  const message = encodeURIComponent(lines.join('\n'));
+  window.open(`https://wa.me/?text=${message}`, '_blank');
+}
