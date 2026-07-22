@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic AI Career & Opportunity Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ===== GLOBAL HEADER ===== -->
+<header class="header">
+  <div class="header-left">
+    <a class="logo" href="#" onclick="showView('home')">
+      <div class="logo-icon">A</div>
+      <div class="logo-text"><span>Agent</span>Career</div>
+    </a>
+    <nav class="nav-links">
+      <button class="nav-link active" data-view="home" onclick="showView('home')">Home</button>
+      <button class="nav-link" data-view="broadcast" onclick="showView('broadcast')">Broadcast Hub</button>
+      <button class="nav-link" data-view="autoapply" onclick="showView('autoapply')">Auto-Apply</button>
+      <button class="nav-link" data-view="funding" onclick="showView('funding')">Funding Matcher</button>
+    </nav>
+  </div>
+  <div class="header-right">
+    <div class="theme-toggle" onclick="toggleTheme()">
+      <i class="fas fa-sun icon" id="themeIcon"></i>
+      <span class="theme-toggle-label" id="themeLabel">Light</span>
+    </div>
+  </div>
+</header>
+
+<!-- ===== HOME VIEW ===== -->
+<div class="view active" id="view-home">
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-badge animate-in stagger-1">
+        <span class="dot"></span>
+        All Systems Operational &mdash; 3 Agents Active
+      </div>
+      <h1 class="animate-in stagger-2">Your Autonomous AI<br><span class="gradient-text">Career & Opportunity Hub</span></h1>
+      <p class="hero-subtitle animate-in stagger-3">One platform powering automated job discovery, instant applications, opportunity broadcasting, and research funding alignment &mdash; all orchestrated by AI agents.</p>
+
+      <div class="hero-metrics animate-in stagger-4">
+        <div class="metric">
+          <div class="metric-value" id="metric-jobs">1,247 <span class="trend live"><i class="fas fa-circle" style="font-size:6px;margin-right:2px;"></i>LIVE</span></div>
+          <div class="metric-label">Jobs Scraped Today</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value" id="metric-applied">386 <span class="trend up">+12%</span></div>
+          <div class="metric-label">Auto-Applications Sent</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value" id="metric-groups">24</div>
+          <div class="metric-label">Student Groups Notified</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value" id="metric-grants">$2.4M <span class="trend up">+8%</span></div>
+          <div class="metric-label">Grants Matched</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="nav-section">
+    <div class="section-header">
+      <div class="section-eyebrow">Module Workspaces</div>
+      <h2 class="section-title">Choose Your Workspace</h2>
+      <p class="section-desc">Three intelligent modules, each powered by dedicated AI agents working around the clock.</p>
+    </div>
+
+    <div class="nav-grid">
+      <div class="nav-card animate-in stagger-1" onclick="showView('broadcast')">
+        <div class="nav-card-icon blue"><i class="fas fa-broadcast-tower"></i></div>
+        <h3>Broadcast Hub</h3>
+        <p>Aggregate freshly scraped opportunities and instantly notify targeted student groups via WhatsApp dispatch.</p>
+        <div class="nav-card-tags">
+          <span class="nav-card-tag">Live Feed</span>
+          <span class="nav-card-tag">WhatsApp</span>
+          <span class="nav-card-tag">Scraper Agent</span>
+        </div>
+        <div class="nav-card-arrow"><i class="fas fa-arrow-right"></i></div>
+      </div>
+
+      <div class="nav-card animate-in stagger-2" onclick="showView('autoapply')">
+        <div class="nav-card-icon teal"><i class="fas fa-rocket"></i></div>
+        <h3>Auto-Apply Engine</h3>
+        <p>Upload your resume, assess ATS compatibility, discover jobs, and auto-apply regardless of match scores.</p>
+        <div class="nav-card-tags">
+          <span class="nav-card-tag">ATS Scoring</span>
+          <span class="nav-card-tag">Kanban</span>
+          <span class="nav-card-tag">Mock Interview</span>
+        </div>
+        <div class="nav-card-arrow"><i class="fas fa-arrow-right"></i></div>
+      </div>
+
+      <div class="nav-card animate-in stagger-3" onclick="showView('funding')">
+        <div class="nav-card-icon green"><i class="fas fa-hand-holding-dollar"></i></div>
+        <h3>Research Funding Matcher</h3>
+        <p>Match your project architecture and problem statement to commercial grants and incubation funds.</p>
+        <div class="nav-card-tags">
+          <span class="nav-card-tag">Grant Matching</span>
+          <span class="nav-card-tag">AI Proposals</span>
+          <span class="nav-card-tag">Startups</span>
+        </div>
+        <div class="nav-card-arrow"><i class="fas fa-arrow-right"></i></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features-section">
+    <div class="features-grid">
+      <div class="feature-card animate-in stagger-1">
+        <div class="fi"><i class="fas fa-robot"></i></div>
+        <h4>Agent-Powered</h4>
+        <p>Every module runs autonomous AI agents that scrape, match, and execute tasks 24/7.</p>
+      </div>
+      <div class="feature-card animate-in stagger-2">
+        <div class="fi"><i class="fas fa-shield-halved"></i></div>
+        <h4>ATS-Proof Applications</h4>
+        <p>Auto-apply to any role regardless of ATS compatibility score. Never miss an opportunity.</p>
+      </div>
+      <div class="feature-card animate-in stagger-3">
+        <div class="fi"><i class="fas fa-comments"></i></div>
+        <h4>Instant Notifications</h4>
+        <p>Broadcast new opportunities to student groups via WhatsApp in real-time.</p>
+      </div>
+      <div class="feature-card animate-in stagger-4">
+        <div class="fi"><i class="fas fa-flask"></i></div>
+        <h4>Research Grants</h4>
+        <p>AI-matched funding opportunities aligned to your project's architecture and goals.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p>&copy; 2026 AgentCareer &mdash; Agentic AI Career & Opportunity Platform. Powered by autonomous agents.</p>
+  </footer>
+</div>
+
+<!-- ===== BROADCAST HUB VIEW ===== -->
+<div class="view" id="view-broadcast">
+  <div class="module-header">
+    <div class="module-header-left">
+      <button class="back-btn" onclick="showView('home')"><i class="fas fa-arrow-left"></i> Home</button>
+      <div>
+        <div class="module-title">Broadcast Hub</div>
+        <div class="module-subtitle">Live opportunity feed & WhatsApp dispatch</div>
+      </div>
+    </div>
+    <div class="live-badge"><span class="dot"></span> Scraper Agent Active</div>
+  </div>
+
+  <div class="module-body">
+    <div class="module-body-flex">
+      <div class="broadcast-feed">
+        <div class="feed-header">
+          <div class="feed-title"><i class="fas fa-bolt" style="color:var(--amber);margin-right:6px;"></i> Live Opportunity Feed</div>
+          <span style="font-size:12px;color:var(--text-muted);">Auto-refreshing every 30s</span>
+        </div>
+        <div class="opportunity-list" id="oppFeed"></div>
+      </div>
+
+      <div class="broadcast-panel">
+        <div class="panel-title"><i class="fab fa-whatsapp" style="color:#25D366;margin-right:6px;"></i> WhatsApp Dispatch</div>
+
+        <div class="form-group">
+          <label class="form-label">Target Student Group</label>
+          <select class="form-select" id="broadcastGroup">
+            <option value="">Select a group...</option>
+            <option value="cs-seniors">CS Seniors (2026 Batch)</option>
+            <option value="ml-enthusiasts">ML/AI Enthusiasts Club</option>
+            <option value="fullstack-devs">Full-Stack Developers</option>
+            <option value="data-science">Data Science Cohort</option>
+            <option value="all">All Groups (Broadcast)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Message Preview</label>
+          <div class="broadcast-preview" id="broadcastPreview">
+            <strong>New Opportunity Alert!</strong><br><br>
+            Select a group and opportunities will be compiled into a broadcast message here. The AI agent formats and dispatches messages automatically.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Custom Note (Optional)</label>
+          <textarea class="form-textarea" rows="3" placeholder="Add a personal note to the broadcast..."></textarea>
+        </div>
+
+        <button class="btn-primary" onclick="broadcastAlert()">
+          <i class="fab fa-whatsapp"></i> Broadcast to Group
+        </button>
+
+        <div style="margin-top:16px; padding:14px; background:var(--bg-secondary); border-radius:10px; font-size:12px; color:var(--text-muted);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Last broadcast:</span><span style="color:var(--text-primary);font-weight:600;">12 min ago</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Recipients:</span><span style="color:var(--text-primary);font-weight:600;">CS Seniors (84)</span></div>
+          <div style="display:flex;justify-content:space-between;"><span>Opportunities sent:</span><span style="color:var(--text-primary);font-weight:600;">7</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AUTO-APPLY ENGINE VIEW ===== -->
+<div class="view" id="view-autoapply">
+  <div class="module-header">
+    <div class="module-header-left">
+      <button class="back-btn" onclick="showView('home')"><i class="fas fa-arrow-left"></i> Home</button>
+      <div>
+        <div class="module-title">Auto-Apply Engine</div>
+        <div class="module-subtitle">End-to-end job search & application workflow</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="module-body">
+    <div class="upload-section">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('resumeInput').click()">
+          <div class="upload-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+          <h4>Drop Resume Here</h4>
+          <p>PDF, DOCX &bull; Max 5MB</p>
+          <input type="file" id="resumeInput" hidden accept=".pdf,.docx">
+        </div>
+        <div style="display:flex;gap:12px;">
+          <input class="form-input" placeholder="Target Job Roles (e.g., Backend Engineer)" style="flex:1;">
+          <input class="form-input" placeholder="Or paste a Target JD Link..." style="flex:1;">
+        </div>
+      </div>
+
+      <div class="ats-panel">
+        <div class="ats-dial">
+          <svg width="120" height="120" viewBox="0 0 120 120">
+            <circle class="ats-dial-bg" cx="60" cy="60" r="50"/>
+            <circle class="ats-dial-fill" cx="60" cy="60" r="50"
+              stroke-dasharray="314"
+              stroke-dashoffset="110"
+              id="atsArc"/>
+          </svg>
+          <div class="ats-dial-text">
+            <div class="score" id="atsScore">65%</div>
+            <div class="label">ATS Match</div>
+          </div>
+        </div>
+        <div class="suggestions">
+          <h4>Optimization Suggestions</h4>
+          <div class="suggestion-item">
+            <span class="si-icon"><i class="fas fa-exclamation-triangle"></i></span>
+            <span>Consider adding <strong>Java Collections</strong> or <strong>Flask</strong> experience to match the JD keywords.</span>
+          </div>
+          <div class="suggestion-item">
+            <span class="si-icon"><i class="fas fa-exclamation-triangle"></i></span>
+            <span>Include measurable impact metrics (e.g., "reduced latency by 40%") in your experience section.</span>
+          </div>
+          <div class="suggestion-item">
+            <span class="si-icon"><i class="fas fa-lightbulb"></i></span>
+            <span>Your education section is strong. Consider adding relevant coursework or certifications.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="job-discovery">
+      <div class="job-discovery-header">
+        <h3><i class="fas fa-compass" style="color:var(--teal);margin-right:8px;"></i> Job Discovery Feed</h3>
+        <button class="btn-secondary"><i class="fas fa-sliders"></i> Filters</button>
+      </div>
+      <div class="job-feed" id="jobFeed"></div>
+    </div>
+
+    <div class="rag-search-section">
+      <h3><i class="fas fa-database" style="color:var(--primary);margin-right:8px;"></i> Resume RAG Search</h3>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Search stored resumes using AI-powered retrieval. The AI agent uses this data to match candidates to jobs.</p>
+      
+      <div class="search-input-group">
+        <input type="text" id="resumeSearchInput" class="form-input" placeholder="Search resumes by skill, name, or keyword..." onkeyup="searchResumes(this.value)" style="flex:1;">
+        <button class="btn-primary" onclick="searchResumes(document.getElementById('resumeSearchInput').value)" style="width:auto;padding:10px 20px;">
+          <i class="fas fa-search"></i> Search
+        </button>
+      </div>
+      
+      <div id="searchResults" style="margin-top:16px;">
+        <p style="color:var(--text-muted);font-size:13px;">Type to search resumes...</p>
+      </div>
+    </div>
+
+    <div class="kanban-section">
+      <h3><i class="fas fa-columns" style="color:var(--primary);margin-right:8px;"></i> Application Tracker</h3>
+      <div class="kanban-board">
+        <div class="kanban-column">
+          <div class="kanban-col-header">
+            <h4>Applied</h4>
+            <span class="kanban-col-count">3</span>
+          </div>
+          <div class="kanban-card">
+            <h5>Backend Engineer</h5>
+            <div class="kc-company">Stripe &bull; Remote</div>
+            <div class="kc-date">Applied Jul 20</div>
+          </div>
+          <div class="kanban-card">
+            <h5>ML Engineer Intern</h5>
+            <div class="kc-company">DeepMind &bull; London</div>
+            <div class="kc-date">Applied Jul 19</div>
+          </div>
+          <div class="kanban-card">
+            <h5>Full-Stack Developer</h5>
+            <div class="kc-company">Notion &bull; SF</div>
+            <div class="kc-date">Applied Jul 18</div>
+          </div>
+        </div>
+
+        <div class="kanban-column">
+          <div class="kanban-col-header">
+            <h4>Screening</h4>
+            <span class="kanban-col-count">2</span>
+          </div>
+          <div class="kanban-card">
+            <h5>Software Engineer L3</h5>
+            <div class="kc-company">Google &bull; Bangalore</div>
+            <div class="kc-date">Screening Jul 17</div>
+          </div>
+          <div class="kanban-card">
+            <h5>Data Engineer</h5>
+            <div class="kc-company">Meta &bull; Menlo Park</div>
+            <div class="kc-date">Screening Jul 16</div>
+          </div>
+        </div>
+
+        <div class="kanban-column">
+          <div class="kanban-col-header">
+            <h4>Interview</h4>
+            <span class="kanban-col-count">2</span>
+          </div>
+          <div class="kanban-card">
+            <h5>Senior SWE</h5>
+            <div class="kc-company">Amazon &bull; Seattle</div>
+            <div class="kc-date">Interview Jul 25</div>
+            <button class="btn-mock" onclick="openMockInterview('Amazon')"><i class="fas fa-microphone"></i> Mock Interview Simulator</button>
+          </div>
+          <div class="kanban-card">
+            <h5>Platform Engineer</h5>
+            <div class="kc-company">Vercel &bull; Remote</div>
+            <div class="kc-date">Interview Jul 28</div>
+            <button class="btn-mock" onclick="openMockInterview('Vercel')"><i class="fas fa-microphone"></i> Mock Interview Simulator</button>
+          </div>
+        </div>
+
+        <div class="kanban-column">
+          <div class="kanban-col-header">
+            <h4>Offer</h4>
+            <span class="kanban-col-count">1</span>
+          </div>
+          <div class="kanban-card" style="border-left:3px solid var(--green);">
+            <h5>DevOps Engineer</h5>
+            <div class="kc-company">GitHub &bull; Remote</div>
+            <div class="kc-date" style="color:var(--green);font-weight:600;">Offer Received!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FUNDING MATCHER VIEW ===== -->
+<div class="view" id="view-funding">
+  <div class="module-header">
+    <div class="module-header-left">
+      <button class="back-btn" onclick="showView('home')"><i class="fas fa-arrow-left"></i> Home</button>
+      <div>
+        <div class="module-title">Research Funding Matcher</div>
+        <div class="module-subtitle">Match your project to commercial grants & incubation funds</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="module-body">
+    <div class="funding-layout">
+      <div class="funding-input-panel">
+        <h3><i class="fas fa-project-diagram" style="color:var(--primary);margin-right:8px;"></i> Project Details</h3>
+
+        <div class="form-group">
+          <label class="form-label">Project Architecture</label>
+          <textarea class="form-textarea" rows="4" placeholder="Describe your project's tech stack and architecture...">AI-assisted prefabricated housing solution (AwaasAI): Microservices architecture with TensorFlow-based structural optimization, React dashboard for project visualization, IoT sensor integration for quality monitoring, and cloud-native deployment on AWS with Terraform IaC.</textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Problem Statement</label>
+          <textarea class="form-textarea" rows="4" placeholder="What problem does your project solve?">Affordable housing shortage in developing nations. AwaasAI uses generative AI to optimize prefabricated housing designs for local materials, climate conditions, and seismic requirements, reducing construction costs by 40% while maintaining structural integrity and enabling rapid deployment at scale.</textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Funding Type</label>
+          <select class="form-select">
+            <option>Startup Grants</option>
+            <option>Government Schemes</option>
+            <option>Incubation Programs</option>
+            <option>Venture Capital</option>
+            <option>Crowdfunding</option>
+          </select>
+        </div>
+
+        <button class="btn-primary" onclick="matchGrants()" style="margin-top:8px;">
+          <i class="fas fa-wand-magic-sparkles"></i> Find Matching Grants
+        </button>
+      </div>
+
+      <div class="funding-feed">
+        <h3><i class="fas fa-trophy" style="color:var(--amber);margin-right:8px;"></i> Matched Funding Opportunities</h3>
+        <div class="grant-list" id="grantList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MOCK INTERVIEW MODAL ===== -->
+<div class="modal-overlay" id="mockModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-microphone" style="color:var(--amber);margin-right:8px;"></i> Mock Interview &mdash; <span id="mockCompany">Amazon</span></h3>
+      <button class="modal-close" onclick="closeMockInterview()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg ai">Welcome to the interview prep simulator! I'll be conducting a mock interview for <strong id="chatCompany">Amazon</strong>. Let's start with a behavioral question: Tell me about a time you had to deal with a difficult stakeholder.</div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Type your response..." onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="chat-send" onclick="sendChat()">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
