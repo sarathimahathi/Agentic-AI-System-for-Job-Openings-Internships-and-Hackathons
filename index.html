@@ -284,6 +284,61 @@
           <div id="atsReport"></div>
         </div>
       </div>
+
+      <!-- Autonomous Agentic AI Search Loop Controls & Feed -->
+      <div class="agent-search-wrapper" id="agentSearchWrapper">
+        <div class="agent-trigger-panel">
+          <div class="agent-panel-header">
+            <div class="agent-title-group">
+              <div class="agent-icon-badge"><i class="fas fa-robot"></i></div>
+              <div>
+                <h3>Autonomous Agentic AI Search Loop</h3>
+                <p>Continuously search platforms, evaluate fit with Ollama, and stream live opportunity cards.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Initial Trigger Buttons State -->
+          <div class="agent-trigger-actions" id="agentTriggerButtons">
+            <button id="btnFindJobs" class="btn-agent-trigger jobs" onclick="startAgenticSearch('jobs')">
+              <i class="fas fa-briefcase"></i> Find Job Openings
+            </button>
+            <button id="btnFindInternships" class="btn-agent-trigger internships" onclick="startAgenticSearch('internships')">
+              <i class="fas fa-graduation-cap"></i> Find Internships
+            </button>
+          </div>
+
+          <!-- Live Running / Stopped Status Bar -->
+          <div class="agent-status-bar" id="agentStatusBar" style="display:none;">
+            <div class="agent-status-left">
+              <div class="agent-pulse-badge" id="agentStatusBadge">
+                <span class="pulse-dot"></span>
+                <span id="agentStatusLabel">Agent Active — Searching Cycle <strong id="agentCycleNum">1</strong></span>
+              </div>
+              <div class="agent-live-subtext" id="agentLiveSubtext">
+                Category: <strong id="agentSearchTypeLabel">Jobs</strong> &bull; Total Streamed: <strong id="agentTotalStreamed">0</strong>
+              </div>
+            </div>
+
+            <div class="agent-status-right">
+              <button id="btnStopSearching" class="btn-stop-search" onclick="stopAgenticSearch()">
+                <i class="fas fa-circle-stop"></i> Stop Searching
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-Time Stream Feed -->
+        <div class="agentic-stream-container" id="agenticStreamContainer" style="display:none;">
+          <div class="stream-header">
+            <div class="stream-title">
+              <i class="fas fa-bolt" style="color:var(--amber);"></i> Live Streamed Opportunities
+            </div>
+            <div class="stream-counter" id="streamCounterBadge">0 Opportunities Found</div>
+          </div>
+          <div class="agentic-feed-grid" id="agenticFeedGrid"></div>
+        </div>
+      </div>
     </div>
 
     <div class="job-discovery">

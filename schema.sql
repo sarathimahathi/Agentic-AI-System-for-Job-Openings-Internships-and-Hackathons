@@ -86,3 +86,33 @@ CREATE POLICY "Allow public updates" ON resume_analyses
 
 CREATE POLICY "Allow public deletes" ON resume_analyses
   FOR DELETE TO public USING (true);
+
+-- ===== AGENTIC JOB OPPORTUNITIES TABLE =====
+CREATE TABLE IF NOT EXISTS job_opportunities (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  session_id TEXT,
+  search_type TEXT NOT NULL, -- 'jobs' or 'internships'
+  title TEXT NOT NULL,
+  company TEXT NOT NULL,
+  platform TEXT NOT NULL, -- 'LinkedIn', 'Indeed', 'Naukri', 'Glassdoor', 'Wellfound', etc.
+  location TEXT,
+  salary_range TEXT,
+  match_percentage NUMERIC NOT NULL DEFAULT 0,
+  matched_skills TEXT[],
+  missing_skills TEXT[],
+  ai_recommendation TEXT,
+  opportunity_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_jo_session ON job_opportunities(session_id);
+CREATE INDEX IF NOT EXISTS idx_jo_search_type ON job_opportunities(search_type);
+CREATE INDEX IF NOT EXISTS idx_jo_created_at ON job_opportunities(created_at DESC);
+
+ALTER TABLE job_opportunities ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public inserts on job_opportunities" ON job_opportunities
+  FOR INSERT TO public WITH CHECK (true);
+
+CREATE POLICY "Allow public reads on job_opportunities" ON job_opportunities
+  FOR SELECT TO public USING (true);

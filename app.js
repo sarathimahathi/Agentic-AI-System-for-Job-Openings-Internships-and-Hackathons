@@ -319,6 +319,10 @@ function sendChat() {
 
 // ===== GLOBAL STATE =====
 let attachedFile = null;
+let activeAgentSessionId = null;
+let agentPollInterval = null;
+let latestParsedResumeData = null;
+let streamedOpportunitiesCount = 0;
 
 // ===== FILE ATTACH (Gmail-like, no processing) =====
 function handleResumeUpload(e) {
@@ -561,6 +565,16 @@ async function analyzeATS() {
       ${(evaluation.strengths || []).map(s => `<div style="font-size:12px;color:var(--green);margin-bottom:4px;">&#10003; ${s}</div>`).join('')}
     </div>`;
 
+    // Cache parsed resume data for post-ATS Agentic AI Search Loop
+    latestParsedResumeData = {
+      skills: resumeData.skills || [],
+      experience_years: resumeData.experience_years || 0,
+      target_role: targetRole || jdData.role_title || 'Software Engineer',
+      education: resumeData.education || '',
+      summary: resumeData.summary || ''
+    };
+    resetAgentTriggers();
+
   } catch (err) {
     console.error('Analyze error:', err);
     let userMessage = err.message;
@@ -667,3 +681,254 @@ async function getResumeById(id) {
 document.getElementById('mockModal').addEventListener('click', function(e) {
   if (e.target === this) closeMockInterview();
 });
+
+// ============================================================
+// AGENTIC AI SEARCH LOOP FRONTEND FUNCTIONS
+// ============================================================
+
+async function startAgenticSearch(searchType) {
+  if (!latestParsedResumeData) {
+    alert('Please run ATS Resume Analysis first to initialize candidate resume context.');
+    return;
+  }
+
+  if (agentPollInterval) {
+    clearInterval(agentPollInterval);
+    agentPollInterval = null;
+  }
+
+  activeAgentSessionId = 'session_' + Date.now();
+  streamedOpportunitiesCount = 0;
+
+  // Switch UI controls
+  const triggerBtns = document.getElementById('agentTriggerButtons');
+  if (triggerBtns) triggerBtns.style.display = 'none';
+
+  const statusBar = document.getElementById('agentStatusBar');
+  if (statusBar) statusBar.style.display = 'flex';
+
+  const statusBadge = document.getElementById('agentStatusBadge');
+  if (statusBadge) {
+    statusBadge.className = 'agent-pulse-badge running';
+    statusBadge.innerHTML = `<span class="pulse-dot"></span><span id="agentStatusLabel">Agent Active &mdash; Searching Cycle <strong id="agentCycleNum">1</strong></span>`;
+  }
+
+  const typeLabel = document.getElementById('agentSearchTypeLabel');
+  if (typeLabel) typeLabel.textContent = searchType === 'internships' ? 'Internships' : 'Job Openings';
+
+  const totalStreamed = document.getElementById('agentTotalStreamed');
+  if (totalStreamed) totalStreamed.textContent = '0';
+
+  const stopBtn = document.getElementById('btnStopSearching');
+  if (stopBtn) {
+    stopBtn.disabled = false;
+    stopBtn.className = 'btn-stop-search';
+    stopBtn.innerHTML = '<i class="fas fa-circle-stop"></i> Stop Searching';
+  }
+
+  const streamContainer = document.getElementById('agenticStreamContainer');
+  if (streamContainer) streamContainer.style.display = 'block';
+
+  const feedGrid = document.getElementById('agenticFeedGrid');
+  if (feedGrid) feedGrid.innerHTML = '';
+
+  const counterBadge = document.getElementById('streamCounterBadge');
+  if (counterBadge) counterBadge.textContent = '0 Opportunities Found';
+
+  try {
+    const response = await fetch('http://localhost:5000/api/agent/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        search_type: searchType,
+        resume_data: latestParsedResumeData,
+        session_id: activeAgentSessionId
+      })
+    });
+
+    const resData = await response.json();
+    if (!response.ok) throw new Error(resData.error || 'Failed to start agent search');
+
+    // Start continuous 1-second polling loop
+    agentPollInterval = setInterval(pollAgentResults, 1000);
+  } catch (err) {
+    console.error('Failed to start search agent:', err);
+    alert('Error starting search agent: ' + err.message);
+    resetAgentTriggers();
+  }
+}
+
+async function pollAgentResults() {
+  if (!activeAgentSessionId) return;
+
+  try {
+    const response = await fetch(`http://localhost:5000/api/agent/poll?session_id=${activeAgentSessionId}`);
+    if (!response.ok) return;
+    const data = await response.json();
+
+    const cycleBadge = document.getElementById('agentCycleNum');
+    if (cycleBadge && data.cycle_count !== undefined) {
+      cycleBadge.textContent = data.cycle_count;
+    }
+
+    const streamedBadge = document.getElementById('agentTotalStreamed');
+    if (streamedBadge) {
+      streamedBadge.textContent = data.total_found !== undefined ? data.total_found : streamedOpportunitiesCount;
+    }
+
+    if (data.items && data.items.length > 0) {
+      const feedGrid = document.getElementById('agenticFeedGrid');
+      if (feedGrid) {
+        data.items.forEach(opp => {
+          streamedOpportunitiesCount++;
+          const cardHtml = createOpportunityCardHtml(opp);
+          feedGrid.insertAdjacentHTML('afterbegin', cardHtml);
+        });
+      }
+      const counterBadge = document.getElementById('streamCounterBadge');
+      if (counterBadge) {
+        counterBadge.textContent = `${streamedOpportunitiesCount} Opportunities Streamed`;
+      }
+    }
+
+    if (data.status === 'stopped') {
+      stopAgenticSearchUI(data.cycle_count || 1);
+    }
+  } catch (err) {
+    console.warn('Poll error:', err);
+  }
+}
+
+async function stopAgenticSearch() {
+  if (agentPollInterval) {
+    clearInterval(agentPollInterval);
+    agentPollInterval = null;
+  }
+
+  const stopBtn = document.getElementById('btnStopSearching');
+  if (stopBtn) {
+    stopBtn.disabled = true;
+    stopBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Stopping Agent...';
+  }
+
+  if (activeAgentSessionId) {
+    try {
+      await fetch('http://localhost:5000/api/agent/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: activeAgentSessionId })
+      });
+    } catch (err) {
+      console.warn('Error stopping agent backend:', err);
+    }
+  }
+
+  const cycleNum = document.getElementById('agentCycleNum') ? document.getElementById('agentCycleNum').textContent : '1';
+  stopAgenticSearchUI(cycleNum);
+}
+
+function stopAgenticSearchUI(cycleNum) {
+  if (agentPollInterval) {
+    clearInterval(agentPollInterval);
+    agentPollInterval = null;
+  }
+
+  const statusBadge = document.getElementById('agentStatusBadge');
+  if (statusBadge) {
+    statusBadge.className = 'agent-pulse-badge stopped';
+    statusBadge.innerHTML = `<i class="fas fa-lock" style="color:var(--amber);margin-right:6px;"></i><span>Agent Stopped &mdash; Final Dashboard State Locked (Cycle ${cycleNum})</span>`;
+  }
+
+  const stopBtn = document.getElementById('btnStopSearching');
+  if (stopBtn && stopBtn.parentNode) {
+    stopBtn.parentNode.innerHTML = `<button class="btn-agent-restart" onclick="resetAgentTriggers()"><i class="fas fa-rotate-left"></i> Start New Search</button>`;
+  }
+}
+
+function resetAgentTriggers() {
+  if (agentPollInterval) {
+    clearInterval(agentPollInterval);
+    agentPollInterval = null;
+  }
+  activeAgentSessionId = null;
+
+  const triggerBtns = document.getElementById('agentTriggerButtons');
+  if (triggerBtns) triggerBtns.style.display = 'flex';
+
+  const statusBar = document.getElementById('agentStatusBar');
+  if (statusBar) statusBar.style.display = 'none';
+
+  const streamContainer = document.getElementById('agenticStreamContainer');
+  if (streamContainer) streamContainer.style.display = 'none';
+
+  const feedGrid = document.getElementById('agenticFeedGrid');
+  if (feedGrid) feedGrid.innerHTML = '';
+}
+
+function createOpportunityCardHtml(opp) {
+  const matchPct = Math.round(opp.match_percentage || 75);
+  let badgeColor = 'var(--green)';
+  let badgeBg = 'var(--green-light)';
+  if (matchPct < 65) { badgeColor = 'var(--red)'; badgeBg = 'var(--red-light)'; }
+  else if (matchPct < 82) { badgeColor = 'var(--amber)'; badgeBg = 'var(--amber-light)'; }
+
+  const platformIcons = {
+    'LinkedIn': 'fab fa-linkedin',
+    'Indeed': 'fas fa-search',
+    'Glassdoor': 'fas fa-star',
+    'Naukri': 'fas fa-briefcase',
+    'Wellfound': 'fas fa-rocket',
+    'YC WorkAtAStartup': 'fas fa-fire',
+    'Google Jobs': 'fab fa-google',
+    'Internshala': 'fas fa-user-graduate'
+  };
+  const iconClass = platformIcons[opp.platform] || 'fas fa-building';
+
+  const matchedSkillsHtml = (opp.matched_skills || []).map(s => `<span class="skill-tag matched">${s}</span>`).join('');
+  const missingSkillsHtml = (opp.missing_skills || []).map(s => `<span class="skill-tag missing">${s}</span>`).join('');
+
+  return `
+    <div class="agentic-opp-card animate-in">
+      <div class="agentic-card-header">
+        <div class="platform-icon-box ${opp.platform ? opp.platform.toLowerCase().replace(/\s+/g, '') : 'default'}">
+          <i class="${iconClass}"></i>
+        </div>
+        <div class="agentic-card-title-group">
+          <h4>${opp.title}</h4>
+          <div class="agentic-company">${opp.company} &bull; <span class="platform-name">${opp.platform}</span></div>
+        </div>
+        <div class="match-score-pill" style="background:${badgeBg}; color:${badgeColor}; border:1px solid ${badgeColor};">
+          <i class="fas fa-bullseye"></i> ${matchPct}% Match
+        </div>
+      </div>
+
+      <div class="agentic-card-meta">
+        <span><i class="fas fa-location-dot"></i> ${opp.location}</span>
+        <span><i class="fas fa-money-bill-wave"></i> ${opp.salary_range}</span>
+        <span><i class="fas fa-clock"></i> ${opp.timestamp || 'Just now'}</span>
+      </div>
+
+      ${opp.ai_recommendation ? `
+        <div class="agentic-ai-reason">
+          <i class="fas fa-brain" style="color:var(--primary);margin-right:6px;"></i>
+          <span><strong>AI Fit Assessment:</strong> ${opp.ai_recommendation}</span>
+        </div>
+      ` : ''}
+
+      <div class="agentic-skills-wrapper">
+        ${matchedSkillsHtml ? `<div class="skills-row"><strong>Matched:</strong> ${matchedSkillsHtml}</div>` : ''}
+        ${missingSkillsHtml ? `<div class="skills-row"><strong>Gaps:</strong> ${missingSkillsHtml}</div>` : ''}
+      </div>
+
+      <div class="agentic-card-actions">
+        <a href="${opp.opportunity_url}" target="_blank" class="btn-opp-apply">
+          <i class="fas fa-external-link-alt"></i> Apply on ${opp.platform}
+        </a>
+        <button class="btn-opp-save" onclick="this.innerHTML='<i class=\\'fas fa-check\\'></i> Saved'; this.style.borderColor='var(--green)';">
+          <i class="far fa-bookmark"></i> Save
+        </button>
+      </div>
+    </div>
+  `;
+}
+
