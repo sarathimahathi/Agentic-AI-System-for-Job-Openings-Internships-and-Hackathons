@@ -281,21 +281,53 @@ function showView(view) {
     view = 'autoapply';
   }
 
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   const targetView = document.getElementById('view-' + view);
-  if (targetView) targetView.classList.add('active');
+  const currentView = document.querySelector('.view.active');
 
-  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-  const activeNav = document.querySelector(`.nav-link[data-view="${view}"]`);
-  if (activeNav) activeNav.classList.add('active');
+  const finishSwap = () => {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active', 'view-transition-out'));
+    if (targetView) targetView.classList.add('active');
 
-  // Initialize broadcast hub when shown
-  if (view === 'broadcast') {
-    renderBroadcastOpps();
-    pollPipelineRuns();
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    const activeNav = document.querySelector(`.nav-link[data-view="${view}"]`);
+    if (activeNav) activeNav.classList.add('active');
+    moveNavIndicator(activeNav);
+
+    // Initialize broadcast hub when shown
+    if (view === 'broadcast') {
+      renderBroadcastOpps();
+      pollPipelineRuns();
+    }
+
+    window.scrollTo(0, 0);
+  };
+
+  if (currentView && currentView !== targetView && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    currentView.classList.add('view-transition-out');
+    setTimeout(finishSwap, 140);
+  } else {
+    finishSwap();
   }
+}
 
-  window.scrollTo(0, 0);
+// ===== NAV SLIDING INDICATOR =====
+function moveNavIndicator(activeEl) {
+  const nav = document.getElementById('mainNavLinks');
+  if (!nav) return;
+  let indicator = document.getElementById('navIndicator');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.id = 'navIndicator';
+    indicator.className = 'nav-indicator';
+    nav.insertBefore(indicator, nav.firstChild);
+  }
+  if (!activeEl || activeEl.offsetParent === null) {
+    indicator.style.opacity = '0';
+    return;
+  }
+  indicator.style.opacity = '1';
+  indicator.style.left = activeEl.offsetLeft + 'px';
+  indicator.style.width = activeEl.offsetWidth + 'px';
 }
 
 // ===== THEME TOGGLE =====
@@ -306,6 +338,82 @@ function toggleTheme() {
   html.setAttribute('data-theme', next);
   document.getElementById('themeIcon').className = next === 'dark' ? 'fas fa-moon icon' : 'fas fa-sun icon';
   document.getElementById('themeLabel').textContent = next === 'dark' ? 'Dark' : 'Light';
+
+  const toggleEl = document.querySelector('.theme-toggle');
+  if (toggleEl) {
+    toggleEl.classList.remove('spin');
+    void toggleEl.offsetWidth; // restart animation
+    toggleEl.classList.add('spin');
+  }
+}
+
+// ===== TOAST NOTIFICATIONS =====
+function showToast(message, type = 'info', icon = 'fa-circle-info') {
+  let stack = document.getElementById('uiToastStack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.id = 'uiToastStack';
+    document.body.appendChild(stack);
+  }
+  const iconByType = { success: 'fa-circle-check', info: 'fa-circle-info', warn: 'fa-triangle-exclamation' };
+  const toast = document.createElement('div');
+  toast.className = `ui-toast ${type}`;
+  toast.innerHTML = `<span class="ui-toast-icon"><i class="fas ${icon || iconByType[type] || iconByType.info}"></i></span><span>${message}</span>`;
+  stack.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('leaving');
+    setTimeout(() => toast.remove(), 320);
+  }, 3200);
+}
+
+// ===== RIPPLE EFFECT (event delegation, no markup changes needed) =====
+function attachRippleEffect() {
+  const rippleSelector = '.btn-primary, .btn-secondary, .btn-outline, .btn-dispatch, ' +
+    '.btn-pipeline-trigger, .btn-agent-trigger, .btn-mock, .btn-opp-apply, ' +
+    '.btn-opp-apply-sm, .btn-opp-save, .btn-opp-whatsapp, .btn-pipeline-stop, ' +
+    '.btn-stop-search, .btn-pipeline-restart, .btn-search, .chat-send, .nav-card';
+
+  document.addEventListener('click', (e) => {
+    const target = e.target.closest(rippleSelector);
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 1.4;
+    const ripple = document.createElement('span');
+    ripple.className = 'ui-ripple';
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+    ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+    target.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 650);
+  });
+}
+
+// ===== CARD SPOTLIGHT (cursor-reactive glow) =====
+function attachCardSpotlight() {
+  const spotlightSelector = '.nav-card, .feature-card, .broadcast-opp-card, .agentic-opp-card, .grant-card, .job-card';
+  let ticking = false;
+  document.addEventListener('mousemove', (e) => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const target = e.target.closest(spotlightSelector);
+      if (target) {
+        const rect = target.getBoundingClientRect();
+        target.style.setProperty('--mx', ((e.clientX - rect.left) / rect.width) * 100 + '%');
+        target.style.setProperty('--my', ((e.clientY - rect.top) / rect.height) * 100 + '%');
+      }
+      ticking = false;
+    });
+  });
+}
+
+// ===== HEADER SCROLL SHADOW =====
+function attachHeaderScrollShadow() {
+  const header = document.querySelector('.header');
+  if (!header) return;
+  window.addEventListener('scroll', () => {
+    header.classList.toggle('scrolled', window.scrollY > 8);
+  }, { passive: true });
 }
 
 // ===== LIVE METRICS ANIMATION =====
@@ -651,6 +759,7 @@ function broadcastToGroup() {
     btn.disabled = false;
     pipelineSelectedOpps.clear();
     renderBroadcastOpps();
+    showToast(`Broadcast sent for ${selected.length} opportunit${selected.length === 1 ? 'y' : 'ies'}`, 'success', 'fa-paper-plane');
   }, 800);
 }
 
@@ -747,7 +856,11 @@ function broadcastAlert() {
 function matchGrants() {
   const container = document.getElementById('grantList');
   container.style.opacity = '0.5';
-  setTimeout(() => { container.style.opacity = '1'; }, 800);
+  setTimeout(() => {
+    container.style.opacity = '1';
+    renderGrants();
+    showToast('Matching funds refreshed', 'success', 'fa-hand-holding-dollar');
+  }, 800);
 }
 
 // ===== MOCK INTERVIEW =====
@@ -829,6 +942,13 @@ document.addEventListener('DOMContentLoaded', () => {
   animateMetric('metric-jobs', 1247);
   animateMetric('metric-applied', 386);
   animateMetric('metric-groups', 24);
+
+  // Motion & micro-interaction layer
+  attachRippleEffect();
+  attachCardSpotlight();
+  attachHeaderScrollShadow();
+  moveNavIndicator(document.querySelector('.nav-link.active'));
+  window.addEventListener('resize', () => moveNavIndicator(document.querySelector('.nav-link.active')));
 
   // File input change
   document.getElementById('resumeInput').addEventListener('change', handleResumeUpload);
@@ -920,6 +1040,11 @@ async function analyzeATS() {
     const evaluation = result.evaluation || {};
     const score = result.score || 0;
     const breakdown = result.score_breakdown || {};
+
+    if (result._meta && result._meta.resume_analysis_cache_hit) {
+      status.textContent = `Served from cache in ${result._meta.elapsed_seconds}s — identical resume + role analyzed before`;
+      showToast('Instant result — served from cache', 'info', 'fa-bolt');
+    }
 
     // Step 3: Upload file to Supabase Storage
     status.textContent = 'Uploading to Supabase...';

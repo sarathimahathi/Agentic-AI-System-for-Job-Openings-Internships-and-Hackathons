@@ -60,6 +60,64 @@ def _store_jd_cache(key: str, data: JDData):
 
 
 # ============================================================
+# Full Analysis Cache — avoids re-running Pass 1 + Pass 3 (both
+# LLM calls) when the exact same resume + JD/role combo is
+# re-submitted. Unlike the JD cache above (which only remembers
+# the parsed job requirements), this remembers the ENTIRE
+# /api/analyze response, so a repeat request short-circuits the
+# whole pipeline and returns in milliseconds.
+# ============================================================
+_analysis_cache: dict = {}
+_analysis_cache_lock = threading.Lock()
+_ANALYSIS_CACHE_TTL = 1800  # 30 minutes — resumes/JDs don't change mid-session
+_ANALYSIS_CACHE_MAX = 200
+
+
+def _get_analysis_cache_key(resume_text: str, jd_text: str = "", target_role: str = "") -> str:
+    # Full resume text (not just first N chars) so different resumes never collide;
+    # role/JD are normalized the same way the JD cache does.
+    raw = (
+        f"{(resume_text or '').strip()}|"
+        f"{(target_role or '').strip().lower()}|"
+        f"{(jd_text or '').strip()}"
+    )
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _check_analysis_cache(key: str) -> Optional[dict]:
+    with _analysis_cache_lock:
+        entry = _analysis_cache.get(key)
+        if entry and (time.time() - entry["ts"] < _ANALYSIS_CACHE_TTL):
+            return entry["data"]
+        if entry:
+            # expired — remove so it doesn't count toward the size cap forever
+            del _analysis_cache[key]
+    return None
+
+
+def _store_analysis_cache(key: str, data: dict):
+    with _analysis_cache_lock:
+        _analysis_cache[key] = {"data": data, "ts": time.time()}
+        if len(_analysis_cache) > _ANALYSIS_CACHE_MAX:
+            # Evict expired first, then oldest, so the cache can't grow unbounded
+            stale = [k for k, v in _analysis_cache.items() if time.time() - v["ts"] > _ANALYSIS_CACHE_TTL]
+            for k in stale[:50]:
+                del _analysis_cache[k]
+            if len(_analysis_cache) > _ANALYSIS_CACHE_MAX:
+                oldest = sorted(_analysis_cache.items(), key=lambda kv: kv[1]["ts"])[:50]
+                for k, _ in oldest:
+                    del _analysis_cache[k]
+
+
+def clear_analysis_cache() -> int:
+    """Manual cache-bust hook — used by /api/analyze/cache/clear."""
+    with _analysis_cache_lock:
+        count = len(_analysis_cache)
+        _analysis_cache.clear()
+        return count
+
+
+# ============================================================
 # Pydantic schemas
 # ============================================================
 
@@ -519,7 +577,7 @@ def pass2_analyze_jd(jd_text: Optional[str], role_title: Optional[str]) -> JDDat
 
 
 # ============================================================
-# Pass 3 — OPTIMIZED Hybrid Evaluation (deterministic + AI fast-path)
+# Pass 3 — Full AI Evaluation (semantic matching + scoring, every request)
 # ============================================================
 
 def _generate_fast_verdict(matched_count: int, missing_count: int, nice_matched: int,
@@ -556,79 +614,90 @@ def _generate_fast_verdict(matched_count: int, missing_count: int, nice_matched:
 
 
 def pass3_evaluate(resume: ResumeData, jd: JDData) -> EvaluationResult:
-    """Optimized: deterministic first, AI only for edge cases."""
-    # Step 1: Deterministic skill matching (instant)
-    det = deterministic_match(resume.skills, jd.mandatory_skills, jd.nice_to_have_skills)
+    """Full AI evaluation: LLM does semantic skill matching AND scoring narrative
+    on every request (no fast-path shortcut). Deterministic matching is kept
+    only as a safety-net fallback if the LLM call fails or returns bad JSON."""
 
-    # Step 2: Experience check (instant)
+    # Experience check stays a plain numeric comparison — it's a fact, not a judgment call.
     meets_exp = (resume.experience_years is not None and
                  jd.minimum_years_experience is not None and
                  resume.experience_years >= jd.minimum_years_experience)
 
-    total_mandatory = len(jd.mandatory_skills)
-    matched_count = len(det["matched_skills"])
-    missing_count = len(det["missing_skills"])
-
-    # Step 3: Fast-path — deterministic verdict for clear cases
-    match_pct = (matched_count / total_mandatory * 100) if total_mandatory > 0 else 100
-
-    # Skip LLM if score is clearly high/low or user wants speed
-    if match_pct >= 75 or match_pct <= 25 or total_mandatory == 0:
-        fast = _generate_fast_verdict(matched_count, missing_count, len(det["nice_to_have_matched"]), meets_exp, jd.role_title)
-        return EvaluationResult(
-            matched_skills=det["matched_skills"],
-            missing_skills=det["missing_skills"],
-            nice_to_have_matched=det["nice_to_have_matched"],
-            nice_to_have_missing=det["nice_to_have_missing"],
-            meets_experience_requirement=meets_exp,
-            strengths=fast["strengths"],
-            weaknesses=fast["weaknesses"],
-            recommendations=fast["recommendations"],
-            verdict=fast["verdict"],
-        )
-
-    # Step 4: AI only for ambiguous cases (50-75% match)
     try:
         messages = [
             {
                 "role": "system",
                 "content": (
-                    "You are an ATS evaluation engine. Provide a concise assessment. "
-                    "Return ONLY valid JSON: strengths, weaknesses, recommendations (3 each), verdict (1 sentence)."
+                    "You are an ATS evaluation engine. Perform SEMANTIC skill matching — "
+                    "recognize synonyms, related tools, and reasonable equivalents "
+                    "(e.g. 'React.js' satisfies 'React', 'Postgres' satisfies 'SQL'), "
+                    "not just exact string matches. "
+                    "matched_skills and missing_skills must together account for every item "
+                    "in the mandatory_skills list; nice_to_have_matched and nice_to_have_missing "
+                    "must together account for every item in the nice_to_have_skills list. "
+                    "Copy matched/missing skill names EXACTLY as given in the input lists — "
+                    "do not paraphrase or rename them, downstream scoring depends on exact matches. "
+                    "Then assess the candidate. "
+                    "Return ONLY valid JSON with keys: matched_skills, missing_skills, "
+                    "nice_to_have_matched, nice_to_have_missing, strengths, weaknesses, "
+                    "recommendations (3 each), verdict (1 sentence)."
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    f"Candidate skills: {', '.join(resume.skills[:12])}\n"
+                    f"Candidate skills: {', '.join(resume.skills)}\n"
+                    f"Candidate experience: {resume.experience_years or 'N/A'} years "
+                    f"(required: {jd.minimum_years_experience or 'N/A'} years, "
+                    f"meets requirement: {meets_exp})\n"
                     f"Target role: {jd.role_title}\n"
                     f"Mandatory skills: {', '.join(jd.mandatory_skills)}\n"
-                    f"Matched: {', '.join(det['matched_skills'])}\n"
-                    f"Missing: {', '.join(det['missing_skills'])}\n"
-                    f"Experience: {resume.experience_years or 'N/A'}y (required: {jd.minimum_years_experience or 'N/A'}y)\n"
-                    f"Match: {round(match_pct)}%\n\n"
-                    "Provide strengths, weaknesses, recommendations, verdict."
+                    f"Nice-to-have skills: {', '.join(jd.nice_to_have_skills)}\n\n"
+                    "Match the candidate's skills against both lists semantically, then evaluate."
                 ),
             },
         ]
 
         raw = _ollama_chat(messages, temperature=0.3, format_schema="json")
         ai_data = _parse_json_from_response(raw)
-    except Exception as e:
-        print(f"[Pass3 AI Fallback] {e}")
-        ai_data = _generate_fast_verdict(matched_count, missing_count, len(det["nice_to_have_matched"]), meets_exp, jd.role_title)
 
-    return EvaluationResult(
-        matched_skills=det["matched_skills"],
-        missing_skills=det["missing_skills"],
-        nice_to_have_matched=det["nice_to_have_matched"],
-        nice_to_have_missing=det["nice_to_have_missing"],
-        meets_experience_requirement=meets_exp,
-        strengths=ai_data.get("strengths", []),
-        weaknesses=ai_data.get("weaknesses", []),
-        recommendations=ai_data.get("recommendations", []),
-        verdict=ai_data.get("verdict", ""),
-    )
+        # Guard against a malformed/empty response — treat as failure and fall back.
+        if not ai_data.get("matched_skills") and not ai_data.get("missing_skills"):
+            raise ValueError("AI returned no skill matching data")
+
+        return EvaluationResult(
+            matched_skills=ai_data.get("matched_skills", []),
+            missing_skills=ai_data.get("missing_skills", []),
+            nice_to_have_matched=ai_data.get("nice_to_have_matched", []),
+            nice_to_have_missing=ai_data.get("nice_to_have_missing", []),
+            meets_experience_requirement=meets_exp,
+            strengths=ai_data.get("strengths", []),
+            weaknesses=ai_data.get("weaknesses", []),
+            recommendations=ai_data.get("recommendations", []),
+            verdict=ai_data.get("verdict", ""),
+        )
+
+    except Exception as e:
+        # Fallback only — deterministic matching + templated verdict, so a single
+        # LLM hiccup never breaks the analysis.
+        print(f"[Pass3 AI Fallback] {e}")
+        det = deterministic_match(resume.skills, jd.mandatory_skills, jd.nice_to_have_skills)
+        meets_exp_fb = meets_exp
+        fast = _generate_fast_verdict(
+            len(det["matched_skills"]), len(det["missing_skills"]),
+            len(det["nice_to_have_matched"]), meets_exp_fb, jd.role_title
+        )
+        return EvaluationResult(
+            matched_skills=det["matched_skills"],
+            missing_skills=det["missing_skills"],
+            nice_to_have_matched=det["nice_to_have_matched"],
+            nice_to_have_missing=det["nice_to_have_missing"],
+            meets_experience_requirement=meets_exp_fb,
+            strengths=fast["strengths"],
+            weaknesses=fast["weaknesses"],
+            recommendations=fast["recommendations"],
+            verdict=fast["verdict"],
+        )
 
 
 # ============================================================
@@ -662,7 +731,9 @@ def calculate_score(evaluation: EvaluationResult, jd: JDData) -> dict:
 
 @app.route("/api/analyze", methods=["POST"])
 def analyze():
-    """OPTIMIZED: Pass 1 & 2 run in parallel, Pass 3 uses fast-path."""
+    """Pass 1 & 2 run in parallel, Pass 3 always runs full AI evaluation —
+    unless this exact resume + JD/role combo was already analyzed recently,
+    in which case the cached result is returned immediately."""
     t_start = time.time()
     try:
         body = request.get_json(force=True)
@@ -671,11 +742,25 @@ def analyze():
         jd_text = jd_text_raw.strip() if jd_text_raw else None
         target_role_raw = body.get("target_role")
         target_role = target_role_raw.strip() if target_role_raw else None
+        force_refresh = bool(body.get("force_refresh"))
 
         if not resume_text:
             return jsonify({"error": "resume_text is required"}), 400
         if not jd_text and not target_role:
             return jsonify({"error": "Provide job_description or target_role"}), 400
+
+        # ---- Full-analysis cache lookup (skips Pass 1 + Pass 3 LLM calls entirely) ----
+        analysis_key = _get_analysis_cache_key(resume_text, jd_text or "", target_role or "")
+        if not force_refresh:
+            cached = _check_analysis_cache(analysis_key)
+            if cached is not None:
+                elapsed = round(time.time() - t_start, 2)
+                response = dict(cached)
+                response["_meta"] = dict(cached.get("_meta", {}))
+                response["_meta"]["elapsed_seconds"] = elapsed
+                response["_meta"]["resume_analysis_cache_hit"] = True
+                print(f"[ATS] Cache HIT for resume analysis (key={analysis_key[:10]}...) | Time: {elapsed}s")
+                return jsonify(response)
 
         # Pass 1 & Pass 2 are independent — run in parallel
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -684,7 +769,7 @@ def analyze():
             resume_data = future_resume.result()
             jd_data = future_jd.result()
 
-        # Pass 3 (uses fast-path for clear cases)
+        # Pass 3 (always full AI evaluation now)
         evaluation = pass3_evaluate(resume_data, jd_data)
 
         # Deterministic score
@@ -693,14 +778,22 @@ def analyze():
         elapsed = round(time.time() - t_start, 2)
         print(f"[ATS] {resume_data.name} | Skills: {len(resume_data.skills)} | Match: {len(evaluation.matched_skills)}/{len(jd_data.mandatory_skills)} | Score: {scoring['score']}% | Time: {elapsed}s")
 
-        return jsonify({
+        result = {
             "resume_data": resume_data.model_dump(),
             "jd_data": jd_data.model_dump(),
             "evaluation": evaluation.model_dump(),
             "score": scoring["score"],
             "score_breakdown": scoring["breakdown"],
-            "_meta": {"elapsed_seconds": elapsed, "cache_hit": _check_jd_cache(_get_jd_cache_key(target_role or "", jd_text or "")) is not None},
-        })
+            "_meta": {
+                "elapsed_seconds": elapsed,
+                "cache_hit": _check_jd_cache(_get_jd_cache_key(target_role or "", jd_text or "")) is not None,
+                "resume_analysis_cache_hit": False,
+            },
+        }
+
+        _store_analysis_cache(analysis_key, result)
+
+        return jsonify(result)
 
     except RuntimeError as e:
         return jsonify({"error": str(e), "type": "ollama_error"}), 503
@@ -709,11 +802,28 @@ def analyze():
         return jsonify({"error": str(e), "type": "internal_error"}), 500
 
 
+@app.route("/api/analyze/cache/clear", methods=["POST"])
+def analyze_cache_clear():
+    """Manual cache-bust endpoint — call if you want the next identical
+    request to force a fresh LLM re-analysis instead of serving cached data."""
+    cleared = clear_analysis_cache()
+    return jsonify({"cleared_entries": cleared})
+
+
 @app.route("/api/health", methods=["GET"])
 def health():
     try:
         ollama.list()
-        return jsonify({"status": "ok", "ollama": "reachable", "model": OLLAMA_MODEL})
+        return jsonify({
+            "status": "ok",
+            "ollama": "reachable",
+            "model": OLLAMA_MODEL,
+            "caches": {
+                "jd_cache_entries": len(_jd_cache),
+                "analysis_cache_entries": len(_analysis_cache),
+                "analysis_cache_ttl_seconds": _ANALYSIS_CACHE_TTL,
+            },
+        })
     except Exception:
         return jsonify({"status": "degraded", "ollama": "unreachable"}), 503
 
